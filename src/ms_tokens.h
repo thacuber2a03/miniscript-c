@@ -48,10 +48,13 @@ TOKEN(MS_TOK_ISA)
 TOKEN(MS_TOK_NEW)
 
 /*** do not modify the order of these!!! ***/
+TOKEN(MS_TOK__BLOCK_START)
 TOKEN(MS_TOK_FUNC)   TOKEN(MS_TOK_END_FUNC)
 TOKEN(MS_TOK_IF)     TOKEN(MS_TOK_END_IF)
 TOKEN(MS_TOK_WHILE)  TOKEN(MS_TOK_END_WHILE)
 TOKEN(MS_TOK_FOR)    TOKEN(MS_TOK_END_FOR)
+TOKEN(MS_TOK_REPEAT) TOKEN(MS_TOK_END_REPEAT)
+TOKEN(MS_TOK__BLOCK_END)
 /*******************************************/
 
 // "user" tokens, i.e. tokens that aren't keywords

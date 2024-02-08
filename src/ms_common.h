@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MS_UNUSED(x) ((void)(x))
+
 #ifdef MS_DEBUG
 
 #define MS_DEBUG_MEM_ALLOC
@@ -40,7 +42,5 @@
 #define MS_ASSERT(cond)
 
 #endif // MS_DEBUG
-
-typedef struct ms_VM ms_VM;
 
 #endif // MS_COMMON_H

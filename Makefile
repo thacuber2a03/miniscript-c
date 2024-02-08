@@ -3,29 +3,31 @@ OUT ?= ./miniscript
 BUILD := build
 
 HFILES := $(wildcard $(SRC)/*.h)
-CFILES := $(wildcard $(SRC)/*.c) ./main.c
+CFILES := $(wildcard $(SRC)/*.c)
 OBJECTS := $(addprefix $(BUILD)/, $(notdir $(CFILES:.c=.o)))
-CFLAGS := -std=c99 -I$(SRC) -g -DMS_DEBUG
+CFLAGS := -std=c99 -I$(SRC) -Wall -Wextra -pedantic
 LDLIBS := -lm
 
-.PHONY: always release debug clean
+ifndef release
+	OBJECTS := $(OBJECTS:.o=.debug.o)
+	CFLAGS += -g -DMS_DEBUG 
+	OUT := $(OUT)-debug
+endif
 
-all: $(BUILD) debug
+.PHONY: clean all
+
+all: $(BUILD) $(OUT)
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-debug: $(HFILES) $(OBJECTS)
-	$(CC) -o $(OUT) $(OBJECTS) $(LDLIBS)
-
-release: $(HFILES) $(OBJECTS)
-	# TODO: this isn't a "release" build yet
-	$(CC) -o $(OUT) $(OBJECTS) $(LDLIBS)
-
-$(BUILD)/%.o: %.c
-	$(CC) -c $(CFLAGS) -o $@ $<
+$(OUT): $(HFILES) $(OBJECTS)
+	$(CC) -o $@ $(OBJECTS) $(LDLIBS)
 
 $(BUILD)/%.o: $(SRC)/%.c
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+$(BUILD)/%.debug.o: $(SRC)/%.c
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:

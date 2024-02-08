@@ -3,11 +3,11 @@
 #include <stdio.h>
 
 #include "ms_common.h"
+#include "ms_vm.h"
 #include "ms_compiler.h"
 #include "ms_mem.h"
 #include "ms_code.h"
 #include "ms_value.h"
-#include "ms_vm.h"
 
 #ifdef MS_DEBUG
 #include "ms_debug.h"
@@ -15,6 +15,8 @@
 
 void *defaultRealloc(void *ptr, size_t oldSize, size_t newSize)
 {
+	MS_UNUSED(oldSize);
+
 	if (newSize == 0)
 	{
 		free(ptr);
@@ -31,7 +33,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 	MS_ASSERT(vm != NULL);
 
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr, "mem: allocated %lu bytes\n", sizeof(ms_VM));
+	fprintf(stderr, "mem: allocated %u bytes\n", sizeof(ms_VM));
 #endif
 
 	vm->reallocFn = reallocFn;
@@ -61,6 +63,7 @@ ms_Value ms_popValueFromVM(ms_VM *vm)
 
 ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 {
+	MS_UNUSED(vm);
 	fprintf(stderr, "Error: %s\n", err);
 	return MS_INTERPRET_RUNTIME_ERROR;
 }

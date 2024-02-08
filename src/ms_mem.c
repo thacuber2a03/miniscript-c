@@ -7,6 +7,7 @@
 void *ms_vmRealloc(ms_VM *vm, void *ptr, size_t oldSize, size_t newSize)
 {
 	bool isFreeing = newSize == 0;
+	MS_UNUSED(isFreeing);
 
 	int diff = newSize - oldSize;
 	vm->bytesUsed += diff;

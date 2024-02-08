@@ -37,6 +37,7 @@ bool ms_isValueFalsy(ms_Value val)
 
 void ms_initList(ms_VM *vm, ms_List *list)
 {
+	MS_UNUSED(vm);
 	list->data = NULL;
 	list->count = list->cap = 0;
 }

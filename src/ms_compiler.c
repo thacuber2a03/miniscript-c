@@ -7,6 +7,8 @@
 
 ms_InterpretResult ms_compileString(ms_VM* vm, char *str, ms_Code *code)
 {
+	MS_UNUSED(vm); MS_UNUSED(code);
+
 	ms_Scanner scanner;
 	ms_initScanner(&scanner, str);
 

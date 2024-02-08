@@ -56,9 +56,9 @@ static inline char peekNext(ms_Scanner *scanner) { return scanner->current[1]; }
 static inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 static inline bool isAlpha(char c)
 {
-	return c >= 'A' && c <= 'Z'
-	    || c >= 'a' && c <= 'z'
-	    || c == '_'; 
+	return (c >= 'A' && c <= 'Z')
+	    || (c >= 'a' && c <= 'z')
+	    || (c == '_');
 }
 
 static ms_Token checkKeyword

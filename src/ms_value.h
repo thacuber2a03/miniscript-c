@@ -12,13 +12,13 @@ typedef struct {
 	ms_ValueType type;
 	union {
 		double number;
-	};
+	} as;
 } ms_Value;
 
 #define MS_VAL_TYPE(val) val.type
 
-#define MS_TO_NUM(val) val.number
-#define MS_FROM_NUM(val) ((ms_Value){ .type = MS_TYPE_NUM, .number = val })
+#define MS_TO_NUM(val) val.as.number
+#define MS_FROM_NUM(val) ((ms_Value){ .type = MS_TYPE_NUM, .as.number = val })
 #define MS_IS_NUM(val) val.type == MS_TYPE_NUM
 
 #define MS_NULL_VAL ((ms_Value){ .type = MS_TYPE_NULL })

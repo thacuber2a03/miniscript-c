@@ -2,8 +2,8 @@
 #define MS_CODE_H
 
 #include "ms_common.h"
-#include "ms_value.h"
 #include "ms_vm.h"
+#include "ms_value.h"
 
 typedef enum {
 	#define OPCODE(op) op,
