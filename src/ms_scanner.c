@@ -149,11 +149,13 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 	return newToken(scanner, MS_TOK_ID);
 }
 
-static ms_Token scanNumber(ms_Scanner *scanner)
+static ms_Token scanNumber(ms_Scanner *scanner, bool startsWithDot)
 {
+	match(scanner, '-');
+
 	while (isDigit(peek(scanner))) advance(scanner);
 
-	if (peek(scanner) == '.' && isDigit(peekNext(scanner)))
+	if (!startsWithDot && peek(scanner) == '.' && isDigit(peekNext(scanner)))
 	{
 		advance(scanner);
 		while (isDigit(peek(scanner))) advance(scanner);
@@ -184,7 +186,14 @@ static ms_Token scanToken(ms_Scanner *scanner)
 } while(false)
 
 		case '+': OP_ASSIGN(scanner, MS_TOK_PLUS);
-		case '-': OP_ASSIGN(scanner, MS_TOK_MINUS);
+
+		case '-':
+			// as an optimization, check if there's a numeric literal right in front
+			if ((check(scanner, '.') && isDigit(peekNext(scanner))) || isDigit(peek(scanner)))
+				return scanNumber(scanner, false);
+
+			OP_ASSIGN(scanner, MS_TOK_MINUS);
+
 		case '*': OP_ASSIGN(scanner, MS_TOK_STAR);
 
 		case '/':
@@ -195,7 +204,6 @@ static ms_Token scanToken(ms_Scanner *scanner)
 				return ms_nextToken(scanner);
 			}
 
-			// it isn't
 			OP_ASSIGN(scanner, MS_TOK_SLASH);
 
 		case '^': OP_ASSIGN(scanner, MS_TOK_CARET);
@@ -211,13 +219,22 @@ static ms_Token scanToken(ms_Scanner *scanner)
 			if (match(scanner, '=')) return newToken(scanner, MS_TOK_NEQ);
 			return errToken(scanner, "Expected '=' after '!'");
 
-		case '.': return newToken(scanner, MS_TOK_DOT);
+		case '.':
+			if (isDigit(peek(scanner))) return scanNumber(scanner, true);
+			return newToken(scanner, MS_TOK_DOT);
+
+		case '(': return newToken(scanner, MS_TOK_LPAREN);
+		case ')': return newToken(scanner, MS_TOK_RPAREN);
+		case '{': return newToken(scanner, MS_TOK_LBRACE);
+		case '}': return newToken(scanner, MS_TOK_RBRACE);
+		case '[': return newToken(scanner, MS_TOK_LSQUARE);
+		case ']': return newToken(scanner, MS_TOK_RSQUARE);
 
 		case ':': return newToken(scanner, MS_TOK_COLON);
 		case '@': return newToken(scanner, MS_TOK_AT_SIGN);
 
 		default:
-			if (isDigit(c)) return scanNumber(scanner);
+			if (isDigit(c)) return scanNumber(scanner, false);
 			if (isAlpha(c)) return scanIdentifier(scanner);
 			return errToken(scanner, "Unknown character");
 	}
