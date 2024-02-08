@@ -1,20 +1,32 @@
 SRC := src
 OUT ?= ./miniscript
+BUILD := build
 
 HFILES := $(wildcard $(SRC)/*.h)
 CFILES := $(wildcard $(SRC)/*.c) ./main.c
-CFLAGS := -std=c99 -lm -I$(SRC)
+OBJECTS := $(addprefix $(BUILD)/, $(notdir $(CFILES:.c=.o)))
+CFLAGS := -std=c99 -I$(SRC) -g -DMS_DEBUG
+LDLIBS := -lm
 
-.PHONY: release debug clean
+.PHONY: always release debug clean
 
-all: debug
+all: $(BUILD) debug
 
-debug: $(CFILES)
-	$(CC) $(CFILES) -g -DMS_DEBUG $(CFLAGS) -o $(OUT)
+$(BUILD):
+	mkdir -p $(BUILD)
 
-release: $(wildcard *.h) $(CFILES)
-	# TODO: figure out how not to compile 'ms_debug.c' in a release build
-	$(CC) $(CFILES) -o $(CFLAGS) $(OUT)
+debug: $(HFILES) $(OBJECTS)
+	$(CC) -o $(OUT) $(OBJECTS) $(LDLIBS)
+
+release: $(HFILES) $(OBJECTS)
+	# TODO: this isn't a "release" build yet
+	$(CC) -o $(OUT) $(OBJECTS) $(LDLIBS)
+
+$(BUILD)/%.o: %.c
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+$(BUILD)/%.o: $(SRC)/%.c
+	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:
-	rm $(OUT)
+	rm $(OUT) $(BUILD) -r
