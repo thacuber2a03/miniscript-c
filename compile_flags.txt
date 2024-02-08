@@ -1,3 +1,4 @@
 -std=c99
 -DMS_DEBUG
 -g
+-Isrc/
