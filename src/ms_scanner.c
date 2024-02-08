@@ -81,41 +81,61 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 	   && (isAlpha(peek(scanner)) || isDigit(peek(scanner))))
 		advance(scanner);
 
+	char nextChar =
+		scanner->current - scanner->start > 1
+		? scanner->start[1] : '\0';
+	
 	// TODO: should `checkKeyword` check the entire string?
+	// TODO: should I even use a trie?
 	switch (*scanner->start)
 	{
 		case 'a': return checkKeyword(scanner, "and", 3, MS_TOK_AND);
-		case 'e': {
-			char *s = scanner->start;
-			ms_TokenType type = scanToken(scanner).type;
-
-			if (type >= MS_TOK_FUNC && type <= MS_TOK_FOR)
+		case 'e':
+			switch (nextChar)
 			{
-				scanner->start = s;
-				return newToken(scanner, type+1);
-			}
+				case 'n': {
+					ms_Token tok = checkKeyword(scanner, "end", 3, MS_TOK_ERROR);
+					if (tok.type == MS_TOK_ERROR)
+					{
+						char *s = scanner->start;
+						ms_TokenType type = scanToken(scanner).type;
 
-			return errToken(scanner, "'end' without proper following keyword ('if', 'while', etc.)");
-		}
-		case 'f':
-			if (scanner->current - scanner->start > 1)
-				switch (scanner->start[1])
-				{
-					case 'a': return checkKeyword(scanner, "false", 5, MS_TOK_FALSE);
-					case 'o': return checkKeyword(scanner, "for", 3, MS_TOK_FOR);
-					case 'u': return checkKeyword(scanner, "function", 8, MS_TOK_FUNC);
+						if (type >= MS_TOK_FUNC && type <= MS_TOK_FOR)
+						{
+							scanner->start = s;
+							return newToken(scanner, type+1);
+						}
+
+						return errToken(scanner, "'end' without proper following keyword ('if', 'while', etc.)");
+					}
+					else return tok;
 				}
+				case 'l': return checkKeyword(scanner, "else", 4, MS_TOK_ELSE);
+			}
 			break;
-		case 'i': return checkKeyword(scanner, "if", 2, MS_TOK_IF);
+		case 'f':
+			switch (nextChar)
+			{
+				case 'a': return checkKeyword(scanner, "false", 5, MS_TOK_FALSE);
+				case 'o': return checkKeyword(scanner, "for", 3, MS_TOK_FOR);
+				case 'u': return checkKeyword(scanner, "function", 8, MS_TOK_FUNC);
+			}
+			break;
+		case 'i':
+			switch (nextChar)
+			{
+				case 'f': return checkKeyword(scanner, "if", 2, MS_TOK_IF);
+				case 'n': return checkKeyword(scanner, "in", 2, MS_TOK_IN);
+			}
 		case 'n':
-			if (scanner->current - scanner->start > 1)
-				switch (scanner->start[1])
-				{
-					case 'o': return checkKeyword(scanner, "not", 3, MS_TOK_NOT);
-					case 'u': return checkKeyword(scanner, "null", 4, MS_TOK_NULL);
-				}
+			switch (nextChar)
+			{
+				case 'o': return checkKeyword(scanner, "not", 3, MS_TOK_NOT);
+				case 'u': return checkKeyword(scanner, "null", 4, MS_TOK_NULL);
+			}
 			break;
 		case 'o': return checkKeyword(scanner, "or", 2, MS_TOK_OR);
+		case 'r': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
 		case 't': return checkKeyword(scanner, "true", 4, MS_TOK_TRUE);
 		case 'w': return checkKeyword(scanner, "while", 5, MS_TOK_WHILE);
 	}
