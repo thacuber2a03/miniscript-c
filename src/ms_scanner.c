@@ -104,8 +104,11 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 						char *s = scanner->start;
 						ms_TokenType type = scanToken(scanner).type;
 
-						if (type >= MS_TOK_FUNC && type <= MS_TOK_FOR)
+						if (type > MS_TOK__BLOCK_START && type < MS_TOK__BLOCK_END)
 						{
+							if (type == MS_TOK_REPEAT || type == MS_TOK_END_REPEAT)
+								return errToken(scanner, "'repeat' is a reserved keyword");
+
 							scanner->start = s;
 							return newToken(scanner, type+1);
 						}
@@ -146,7 +149,9 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 			switch (nextNextChar)
 			{
 				case 't': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
-				case 'p': return checkKeyword(scanner, "repeat", 6, MS_TOK_REPEAT);
+				case 'p':
+					return errToken(scanner, "'repeat' is a reserved keyword");
+					// return checkKeyword(scanner, "repeat", 6, MS_TOK_REPEAT);
 			}
 		case 't':
 			switch (nextChar)
@@ -201,7 +206,7 @@ static ms_Token scanToken(ms_Scanner *scanner)
 		case '-':
 			// as an optimization, check if there's a numeric literal right in front
 			if ((check(scanner, '.') && isDigit(peekNext(scanner))) || isDigit(peek(scanner)))
-				return scanNumber(scanner, false);
+				return scanNumber(scanner, check(scanner, '.'));
 
 			OP_ASSIGN(scanner, MS_TOK_MINUS);
 
