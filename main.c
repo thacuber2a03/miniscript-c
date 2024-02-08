@@ -12,11 +12,12 @@ static void repl(ms_VM *vm)
 	{
 		printf("> ");
 		if (!fgets(buffer, sizeof buffer, stdin)) exit(-1);
+		*strrchr(buffer, '\n') = '\0';
 		ms_interpretString(vm, buffer);
 	}
 }
 
-static char *runFile(ms_VM *vm, char *path)
+static void runFile(ms_VM *vm, char *path)
 {
 	FILE *fp = fopen(path, "rb");
 	if (fp == NULL)
