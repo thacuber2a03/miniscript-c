@@ -127,6 +127,7 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 				case 'f': return checkKeyword(scanner, "if", 2, MS_TOK_IF);
 				case 'n': return checkKeyword(scanner, "in", 2, MS_TOK_IN);
 			}
+			break;
 		case 'n':
 			switch (nextChar)
 			{
@@ -136,7 +137,12 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 			break;
 		case 'o': return checkKeyword(scanner, "or", 2, MS_TOK_OR);
 		case 'r': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
-		case 't': return checkKeyword(scanner, "true", 4, MS_TOK_TRUE);
+		case 't':
+			switch (nextChar)
+			{
+				case 'r': return checkKeyword(scanner, "true", 4, MS_TOK_TRUE);
+				case 'h': return checkKeyword(scanner, "then", 4, MS_TOK_THEN);
+			}
 		case 'w': return checkKeyword(scanner, "while", 5, MS_TOK_WHILE);
 	}
 
@@ -161,9 +167,13 @@ static ms_Token scanToken(ms_Scanner *scanner)
 	char c = advance(scanner);
 	switch (c)
 	{
-		case '\n':
+		case '\n': {
+			ms_Token tok = newToken(scanner, MS_TOK_NEWLINE);
 			scanner->line++;
-			return newToken(scanner, MS_TOK_NEWLINE);
+			return tok;
+		}
+
+		case ';': return newToken(scanner, MS_TOK_NEWLINE);
 
 		case ' ': case '\r': case '\t':
 			return ms_nextToken(scanner);
@@ -201,8 +211,10 @@ static ms_Token scanToken(ms_Scanner *scanner)
 			if (match(scanner, '=')) return newToken(scanner, MS_TOK_NEQ);
 			return errToken(scanner, "Expected '=' after '!'");
 
+		case '.': return newToken(scanner, MS_TOK_DOT);
+
 		case ':': return newToken(scanner, MS_TOK_COLON);
-		case ';': return newToken(scanner, MS_TOK_SEMI);
+		case '@': return newToken(scanner, MS_TOK_AT_SIGN);
 
 		default:
 			if (isDigit(c)) return scanNumber(scanner);
