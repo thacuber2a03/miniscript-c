@@ -84,6 +84,10 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 	char nextChar =
 		scanner->current - scanner->start > 1
 		? scanner->start[1] : '\0';
+
+	char nextNextChar =
+		scanner->current - scanner->start > 2
+		? scanner->start[2] : '\0';
 	
 	// TODO: should `checkKeyword` check the entire string?
 	// TODO: should I even use a trie?
@@ -126,17 +130,24 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 			{
 				case 'f': return checkKeyword(scanner, "if", 2, MS_TOK_IF);
 				case 'n': return checkKeyword(scanner, "in", 2, MS_TOK_IN);
+				case 's': return checkKeyword(scanner, "isa", 3, MS_TOK_ISA);
 			}
 			break;
 		case 'n':
 			switch (nextChar)
 			{
+				case 'e': return checkKeyword(scanner, "new", 3, MS_TOK_NEW);
 				case 'o': return checkKeyword(scanner, "not", 3, MS_TOK_NOT);
 				case 'u': return checkKeyword(scanner, "null", 4, MS_TOK_NULL);
 			}
 			break;
 		case 'o': return checkKeyword(scanner, "or", 2, MS_TOK_OR);
-		case 'r': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
+		case 'r':
+			switch (nextNextChar)
+			{
+				case 't': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
+				case 'p': return checkKeyword(scanner, "repeat", 6, MS_TOK_REPEAT);
+			}
 		case 't':
 			switch (nextChar)
 			{
