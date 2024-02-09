@@ -9,6 +9,7 @@ const char *ms_getOpcodeName(ms_Opcode op)
 		#define OPCODE(op) case op: return #op;
 		#include "ms_opcodes.h"
 		#undef OPCODE
+		default: return NULL; // unreachable
 	}
 }
 

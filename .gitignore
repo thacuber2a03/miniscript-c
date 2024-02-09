@@ -1,2 +1,3 @@
 miniscript
-build/miniscript-debug
+miniscript-debug
+build/

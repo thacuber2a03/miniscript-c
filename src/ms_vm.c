@@ -33,7 +33,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 	MS_ASSERT(vm != NULL);
 
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr, "mem: allocated %u bytes\n", sizeof(ms_VM));
+	fprintf(stderr, "mem: allocated %zu bytes\n", sizeof(ms_VM));
 #endif
 
 	vm->reallocFn = reallocFn;

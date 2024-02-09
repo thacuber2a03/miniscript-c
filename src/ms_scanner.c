@@ -9,6 +9,7 @@ const char *ms_getTokenTypeName(ms_TokenType type)
 		#define TOKEN(t) case t: return #t;
 		#include "ms_tokens.h"
 		#undef TOKEN
+		default: return NULL; // unreachable
 	}
 }
 
@@ -88,7 +89,7 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 	char nextNextChar =
 		scanner->current - scanner->start > 2
 		? scanner->start[2] : '\0';
-	
+
 	// TODO: should `checkKeyword` check the entire string?
 	// TODO: should I even use a trie?
 	switch (*scanner->start)
@@ -153,12 +154,14 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 					return errToken(scanner, "'repeat' is a reserved keyword");
 					// return checkKeyword(scanner, "repeat", 6, MS_TOK_REPEAT);
 			}
+			break;
 		case 't':
 			switch (nextChar)
 			{
 				case 'r': return checkKeyword(scanner, "true", 4, MS_TOK_TRUE);
 				case 'h': return checkKeyword(scanner, "then", 4, MS_TOK_THEN);
 			}
+			break;
 		case 'w': return checkKeyword(scanner, "while", 5, MS_TOK_WHILE);
 	}
 
@@ -195,7 +198,7 @@ static ms_Token scanToken(ms_Scanner *scanner)
 
 		case ' ': case '\r': case '\t':
 			return ms_nextToken(scanner);
-		
+
 #define OP_ASSIGN(scanner, type) do {                          \
 	if (match(scanner, '=')) return newToken(scanner, (type)+1); \
 	return newToken(scanner, type);                              \
