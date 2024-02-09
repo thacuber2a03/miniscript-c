@@ -214,7 +214,8 @@ static ms_Token scanNumber(ms_Scanner *scanner, bool startsWithDot)
 
 static ms_Token scanString(ms_Scanner *scanner)
 {
-	while (!match(scanner, '"'))
+	size_t l = scanner->line;
+	while (!isAtEnd(scanner) && !match(scanner, '"'))
 	{
 		advance(scanner);
 		while (check(scanner, '"') && peekNext(scanner) == '"')
@@ -222,6 +223,12 @@ static ms_Token scanString(ms_Scanner *scanner)
 			advance(scanner);
 			advance(scanner);
 		}
+	}
+
+	if (isAtEnd(scanner))
+	{
+		scanner->line = l;
+		return errToken("Unterminated string.");
 	}
 
 	return newToken(scanner, MS_TOK_STR);
