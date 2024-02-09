@@ -182,6 +182,21 @@ static ms_Token scanNumber(ms_Scanner *scanner, bool startsWithDot)
 	return newToken(scanner, MS_TOK_NUM);
 }
 
+static ms_Token scanString(ms_Scanner *scanner)
+{
+	while (!match(scanner, '"'))
+	{
+		advance(scanner);
+		if (check(scanner, '"') && peekNext(scanner) == '"')
+		{
+			advance(scanner);
+			advance(scanner);
+		}
+	}
+
+	return newToken(scanner, MS_TOK_STR);
+}
+
 static ms_Token scanToken(ms_Scanner *scanner)
 {
 	char c = advance(scanner);
@@ -250,6 +265,8 @@ static ms_Token scanToken(ms_Scanner *scanner)
 
 		case ':': return newToken(scanner, MS_TOK_COLON);
 		case '@': return newToken(scanner, MS_TOK_AT_SIGN);
+
+		case '"': return scanString(scanner);
 
 		default:
 			if (isDigit(c)) return scanNumber(scanner, false);
