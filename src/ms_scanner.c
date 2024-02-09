@@ -103,13 +103,13 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 					if (tok.type == MS_TOK_ERROR)
 					{
 						char *s = scanner->start;
-						ms_TokenType type = scanToken(scanner).type;
+						ms_Token tok = scanToken(scanner);
+						ms_TokenType type = tok.type;
+
+						if (type == MS_TOK_ERROR) return tok;
 
 						if (type > MS_TOK__BLOCK_START && type < MS_TOK__BLOCK_END)
 						{
-							if (type == MS_TOK_REPEAT || type == MS_TOK_END_REPEAT)
-								return errToken(scanner, "'repeat' is a reserved keyword");
-
 							scanner->start = s;
 							return newToken(scanner, type+1);
 						}
@@ -261,7 +261,7 @@ static ms_Token scanToken(ms_Scanner *scanner)
 
 				return tok;
 			}
-			
+
 			return errToken(scanner, "Unknown character");
 	}
 }
