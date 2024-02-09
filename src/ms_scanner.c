@@ -137,6 +137,7 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 				case 's': return checkKeyword(scanner, "isa", 3, MS_TOK_ISA);
 			}
 			break;
+		case 'l': return checkKeyword(scanner, "locals", 6, MS_TOK_LOCALS);
 		case 'n':
 			switch (nextChar)
 			{
@@ -176,6 +177,21 @@ static ms_Token scanNumber(ms_Scanner *scanner, bool startsWithDot)
 	if (!startsWithDot && peek(scanner) == '.' && isDigit(peekNext(scanner)))
 	{
 		advance(scanner);
+		while (isDigit(peek(scanner))) advance(scanner);
+	}
+
+	if (match(scanner, 'e') || match(scanner, 'E'))
+	{
+		{
+			ms_Token err = errToken(scanner, "Exponential string literal already contains a sign in the exponent");
+			bool sign = match(scanner, '-') || match(scanner, '+');
+			if (sign && (match(scanner, '+') || match(scanner, '-')))
+				return err;
+		}
+
+		if (!isDigit(peek(scanner)))
+			return errToken(scanner, "Missing number literal after 'E', 'e' or sign ('+' or '-')");
+
 		while (isDigit(peek(scanner))) advance(scanner);
 	}
 
@@ -273,9 +289,7 @@ static ms_Token scanToken(ms_Scanner *scanner)
 			if (isAlpha(c))
 			{
 				ms_Token tok = scanIdentifier(scanner);
-				if (tok.type == MS_TOK_REPEAT)
-					return errToken(scanner, "'repeat' is a reserved keyword");
-
+				if (tok.type == MS_TOK_REPEAT) return errToken(scanner, "'repeat' is a reserved keyword");
 				return tok;
 			}
 

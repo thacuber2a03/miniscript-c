@@ -18,13 +18,13 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *str, ms_Code *code)
 		ms_Token tok = ms_nextToken(&scanner);
 
 		if (prevLine != tok.line)
-			printf("%04d | ", tok.line);
+			printf("%4d ->", tok.line);
 		else
 			printf("     | ");
 
-		printf("%s", ms_getTokenTypeName(tok.type));
+		printf("%16s", ms_getTokenTypeName(tok.type));
 
-		if (tok.type != MS_TOK_NEWLINE)
+		if (tok.type > MS_TOK__USER_START && tok.type < MS_TOK__USER_END)
 			printf(" '%.*s'", tok.length, tok.start);
 
 		putchar('\n');

@@ -1,10 +1,12 @@
-// this is here for the same reason ms_opcode.h exists 
+// this is here for the same reason ms_opcode.h exists
 
 #ifndef TOKEN
 #define TOKEN(t)
 #endif
 
 // single and double character tokens
+
+TOKEN(MS_TOK__CHARTOKS_START)
 
 /****** do not modify the order of these!!! ******/
 TOKEN(MS_TOK_PLUS)    TOKEN(MS_TOK_PLUS_ASSIGN)
@@ -28,12 +30,17 @@ TOKEN(MS_TOK_LPAREN)  TOKEN(MS_TOK_RPAREN)
 TOKEN(MS_TOK_LBRACE)  TOKEN(MS_TOK_RBRACE)
 TOKEN(MS_TOK_LSQUARE) TOKEN(MS_TOK_RSQUARE)
 
-TOKEN(MS_TOK_AT_SIGN) TOKEN(MS_TOK_NEWLINE)
+TOKEN(MS_TOK_AT_SIGN)
+TOKEN(MS_TOK_NEWLINE)
+
+TOKEN(MS_TOK__CHARTOKS_END)
 
 // keywords
-TOKEN(MS_TOK_NULL)
-TOKEN(MS_TOK_FALSE)
+TOKEN(MS_TOK__KEYWORD_START)
+
 TOKEN(MS_TOK_TRUE)
+TOKEN(MS_TOK_FALSE)
+TOKEN(MS_TOK_NULL)
 
 TOKEN(MS_TOK_AND)
 TOKEN(MS_TOK_OR)
@@ -46,22 +53,34 @@ TOKEN(MS_TOK_RETURN)
 
 TOKEN(MS_TOK_ISA)
 TOKEN(MS_TOK_NEW)
+TOKEN(MS_TOK_SUPER)
+TOKEN(MS_TOK_SELF)
 
-/*** do not modify the order of these!!! ***/
+TOKEN(MS_TOK_GLOBALS)
+TOKEN(MS_TOK_LOCALS)
+
+TOKEN(MS_TOK__KEYWORD_END)
+
 TOKEN(MS_TOK__BLOCK_START)
+/*** do not modify the order of these!!! ***/
 TOKEN(MS_TOK_FUNC)   TOKEN(MS_TOK_END_FUNC)
 TOKEN(MS_TOK_IF)     TOKEN(MS_TOK_END_IF)
 TOKEN(MS_TOK_WHILE)  TOKEN(MS_TOK_END_WHILE)
 TOKEN(MS_TOK_FOR)    TOKEN(MS_TOK_END_FOR)
 TOKEN(MS_TOK_REPEAT) TOKEN(MS_TOK_END_REPEAT)
-TOKEN(MS_TOK__BLOCK_END)
 /*******************************************/
+TOKEN(MS_TOK__BLOCK_END)
 
 // "user" tokens, i.e. tokens that aren't keywords
+// but are still useful to know about
+TOKEN(MS_TOK__USER_START)
+
 TOKEN(MS_TOK_NUM)
 TOKEN(MS_TOK_ID)
 TOKEN(MS_TOK_STR)
 
-// internal tokens
+TOKEN(MS_TOK__USER_END)
+
+// tokens used internally
 TOKEN(MS_TOK_ERROR)
 TOKEN(MS_TOK_EOF)
