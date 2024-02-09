@@ -228,7 +228,7 @@ static ms_Token scanString(ms_Scanner *scanner)
 	if (isAtEnd(scanner))
 	{
 		scanner->line = l;
-		return errToken("Unterminated string.");
+		return errToken(scanner, "Unterminated string.");
 	}
 
 	return newToken(scanner, MS_TOK_STR);
