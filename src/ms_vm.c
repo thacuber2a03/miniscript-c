@@ -73,13 +73,13 @@ ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 	return MS_INTERPRET_RUNTIME_ERROR;
 }
 
-static ms_InterpretResult interpret(register ms_VM* vm, ms_Code code)
+static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 {
-	register uint8_t *ip = code.data;
+	register uint8_t *ip = code->data;
 	register ms_Value temp;
 
 #define NEXT_BYTE() (*ip++)
-#define NEXT_CONST() (code.constants.data[NEXT_BYTE()])
+#define NEXT_CONST() (code->constants.data[NEXT_BYTE()])
 #define BINARY_OP(vm, op) do {                                         \
     ms_Value b = ms_popValueFromVM(vm);                                \
     ms_Value a = ms_popValueFromVM(vm);                                \
@@ -107,7 +107,7 @@ static ms_InterpretResult interpret(register ms_VM* vm, ms_Code code)
 			printf("]");
 		}
 		printf("\nvm: current instruction: ");
-		ms_disassembleInstruction(&code, ip-code.data);
+		ms_disassembleInstruction(code, ip-code->data);
 		printf("\n");
 #endif
 
@@ -191,7 +191,7 @@ void ms_runTestProgram(ms_VM *vm)
 	ms_addByteToCode(vm, &code, MS_OP_POP);
 	ms_addByteToCode(vm, &code, MS_OP_RETURN);
 
-	interpret(vm, code);
+	interpret(vm, &code);
 
 	ms_freeCode(vm, &code);
 }
@@ -209,7 +209,7 @@ ms_InterpretResult ms_interpretString(ms_VM *vm, char *str)
 	}
 
 	initVM(vm);
-	res = interpret(vm, code);
+	res = interpret(vm, &code);
 	ms_freeCode(vm, &code);
 	return res;
 }
