@@ -118,7 +118,21 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 					}
 					else return tok;
 				}
-				case 'l': return checkKeyword(scanner, "else", 4, MS_TOK_ELSE);
+				case 'l': {
+					ms_Token tok = checkKeyword(scanner, "else", 4, MS_TOK_ELSE);
+					if (tok.type == MS_TOK_ELSE)
+					{
+						char *c = scanner->current;
+						size_t l = scanner->line;
+						ms_TokenType type = scanToken(scanner).type;
+						if (type == MS_TOK_IF) return newToken(scanner, MS_TOK_ELSE_IF);
+
+						scanner->current = c;
+						scanner->line = l;
+						return tok;
+					}
+					break;
+				}
 			}
 			break;
 		case 'f':
@@ -203,7 +217,7 @@ static ms_Token scanString(ms_Scanner *scanner)
 	while (!match(scanner, '"'))
 	{
 		advance(scanner);
-		if (check(scanner, '"') && peekNext(scanner) == '"')
+		while (check(scanner, '"') && peekNext(scanner) == '"')
 		{
 			advance(scanner);
 			advance(scanner);
@@ -267,6 +281,8 @@ static ms_Token scanToken(ms_Scanner *scanner)
 		case '!':
 			if (match(scanner, '=')) return newToken(scanner, MS_TOK_NEQ);
 			return errToken(scanner, "Expected '=' after '!'");
+
+		case ',': return newToken(scanner, MS_TOK_COMMA);
 
 		case '.':
 			if (isDigit(peek(scanner))) return scanNumber(scanner, true);

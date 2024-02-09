@@ -18,11 +18,14 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *str, ms_Code *code)
 		ms_Token tok = ms_nextToken(&scanner);
 
 		if (prevLine != tok.line)
-			printf("%4d ->", tok.line);
+			printf("%04d |>", tok.line);
+		else if (tok.type == MS_TOK_NEWLINE)
+			for (int i = 0; i < 35; i++) putchar('-');
 		else
 			printf("     | ");
 
-		printf("%16s", ms_getTokenTypeName(tok.type));
+		if (tok.type != MS_TOK_NEWLINE)
+			printf("%16s", ms_getTokenTypeName(tok.type));
 
 		if (tok.type > MS_TOK__USER_START && tok.type < MS_TOK__USER_END)
 			printf(" '%.*s'", tok.length, tok.start);
@@ -30,7 +33,7 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *str, ms_Code *code)
 		putchar('\n');
 
 		prevLine = tok.line;
-		if (tok.type == MS_TOK_EOF) break;
+		if (tok.type == MS_TOK_EOF || tok.type == MS_TOK_ERROR) break;
 	}
 
 	// so the VM doesn't run anything until both the scanner and compiler are finished
