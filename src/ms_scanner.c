@@ -150,8 +150,7 @@ static ms_Token scanIdentifier(ms_Scanner *scanner)
 			switch (nextNextChar)
 			{
 				case 't': return checkKeyword(scanner, "return", 6, MS_TOK_RETURN);
-				case 'p':
-					return errToken(scanner, "'repeat' is a reserved keyword");
+				case 'p': return newToken(scanner, MS_TOK_REPEAT);
 					// return checkKeyword(scanner, "repeat", 6, MS_TOK_REPEAT);
 			}
 			break;
@@ -254,7 +253,15 @@ static ms_Token scanToken(ms_Scanner *scanner)
 
 		default:
 			if (isDigit(c)) return scanNumber(scanner, false);
-			if (isAlpha(c)) return scanIdentifier(scanner);
+			if (isAlpha(c))
+			{
+				ms_Token tok = scanIdentifier(scanner);
+				if (tok.type == MS_TOK_REPEAT)
+					return errToken(scanner, "'repeat' is a reserved keyword");
+
+				return tok;
+			}
+			
 			return errToken(scanner, "Unknown character");
 	}
 }

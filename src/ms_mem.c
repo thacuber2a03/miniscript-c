@@ -1,3 +1,6 @@
+#ifdef MS_DEBUG_MEM_ALLOC
+#include <stdio.h>
+#endif
 #include <stdlib.h>
 
 #include "ms_common.h"

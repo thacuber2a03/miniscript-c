@@ -5,12 +5,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MS_UNUSED(x) ((void)(x))
-
 #ifdef MS_DEBUG
-
 #define MS_DEBUG_MEM_ALLOC
 #define MS_DEBUG_EXECUTION
+#define MS_DEBUG_ASSERTIONS
+#endif
+
+#define MS_UNUSED(x) ((void)(x))
+
+#ifdef MS_DEBUG_ASSERTIONS
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -41,6 +44,6 @@
 #define MS_ASSERT_REASON(cond, reason)
 #define MS_ASSERT(cond)
 
-#endif // MS_DEBUG
+#endif // MS_DEBUG_ASSERTIONS
 
 #endif // MS_COMMON_H

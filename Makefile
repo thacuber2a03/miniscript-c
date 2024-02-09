@@ -9,9 +9,11 @@ OBJECTS := $(addprefix $(BUILD)/, $(notdir $(CFILES:.c=.o)))
 CFLAGS := -std=c99 -I$(SRC) -Wall -Wextra -pedantic
 LDLIBS := -lm
 
+debug-flags ?= MS_DEBUG
+
 ifndef release
 	OBJECTS := $(OBJECTS:.o=.debug.o)
-	CFLAGS += -g -DMS_DEBUG 
+	CFLAGS += -g $(addprefix -D, $(debug-flags))
 	OUT := $(OUT)-debug
 endif
 

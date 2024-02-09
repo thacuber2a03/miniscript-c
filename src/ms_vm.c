@@ -9,7 +9,7 @@
 #include "ms_code.h"
 #include "ms_value.h"
 
-#ifdef MS_DEBUG
+#ifdef MS_DEBUG_EXECUTION
 #include "ms_debug.h"
 #endif
 
