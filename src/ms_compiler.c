@@ -2,9 +2,11 @@
 #include <stdio.h>
 
 #include "ms_compiler.h"
+#include "ms_object.h"
 #include "ms_scanner.h"
 #include "ms_value.h"
 #include "ms_code.h"
+#include "ms_mem.h"
 
 #ifdef MS_DEBUG_PRINT_CODE
 #include "ms_debug.h"
@@ -112,7 +114,7 @@ static void emitReturn(ms_Compiler *compiler)
 static uint8_t makeConstant(ms_Compiler *compiler, ms_Value value)
 {
 	// TODO: make the operand a 16 bit index
-	int constant = ms_addConstToCode(compiler->vm, compiler->currentCode, value);
+	size_t constant = ms_addConstToCode(compiler->vm, compiler->currentCode, value);
 	if (constant > UINT8_MAX)
 	{
 		error(compiler, "Too many constants in one chunk.");
@@ -149,15 +151,15 @@ static void binary(ms_Compiler *compiler)
 
 	switch (operatorType)
 	{
-		case MS_TOK_PLUS:    emitByte(compiler, MS_OP_ADD);      break;
-		case MS_TOK_MINUS:   emitByte(compiler, MS_OP_SUBTRACT); break;
-		case MS_TOK_STAR:    emitByte(compiler, MS_OP_MULTIPLY); break;
-		case MS_TOK_SLASH:   emitByte(compiler, MS_OP_DIVIDE);   break;
-		case MS_TOK_PERCENT: emitByte(compiler, MS_OP_MODULO);   break;
-		case MS_TOK_CARET:   emitByte(compiler, MS_OP_POWER);    break;
+		case MS_TOK_PLUS:    emitByte(compiler, MS_OP_ADD);       break;
+		case MS_TOK_MINUS:   emitByte(compiler, MS_OP_SUBTRACT);  break;
+		case MS_TOK_STAR:    emitByte(compiler, MS_OP_MULTIPLY);  break;
+		case MS_TOK_SLASH:   emitByte(compiler, MS_OP_DIVIDE);    break;
+		case MS_TOK_PERCENT: emitByte(compiler, MS_OP_MODULO);    break;
+		case MS_TOK_CARET:   emitByte(compiler, MS_OP_POWER);     break;
 
-		case MS_TOK_AND:     emitByte(compiler, MS_OP_AND);      break;
-		case MS_TOK_OR:      emitByte(compiler, MS_OP_OR);       break;
+		case MS_TOK_AND:     emitByte(compiler, MS_OP_AND);       break;
+		case MS_TOK_OR:      emitByte(compiler, MS_OP_OR);        break;
 		default: return; // unreachable
 	}
 }
@@ -172,6 +174,25 @@ static void number(ms_Compiler *compiler)
 {
 	double value = strtod(compiler->previous.start, NULL);
 	emitConstant(compiler, MS_FROM_NUM(value));
+}
+
+static void string(ms_Compiler *compiler)
+{
+	char* str = MS_MEM_MALLOC_ARR(compiler->vm, char, compiler->previous.length);
+	size_t realLen = 0;
+
+	ms_Token tok = compiler->previous;
+	for (int i = 1; i < tok.length-1; i++)
+	{
+		char c = tok.start[i];
+		if (c == '"' && tok.start[i+1] == '"') i++;
+		str[realLen] = c;
+		realLen++;
+	}
+
+	str = MS_MEM_REALLOC_ARR(compiler->vm, char, str, tok.length, realLen + 1);
+
+	emitConstant(compiler, MS_FROM_OBJ(ms_newString(compiler->vm, str, realLen)));
 }
 
 static void literal(ms_Compiler *compiler)
@@ -217,6 +238,7 @@ ParseRule rules[MS_TOK__END] = {
 	[MS_TOK_NULL]    = {literal,  NULL,   PREC_NONE  },
 
 	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE  },
+	[MS_TOK_STR]     = {string,   NULL,   PREC_NONE  },
 };
 
 static void parsePrecedence(ms_Compiler *compiler, ParsePrecedence precedence)

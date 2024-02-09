@@ -43,6 +43,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 
 	vm->reallocFn = reallocFn;
 	vm->bytesUsed = sizeof *vm;
+	vm->objects = NULL;
 	initVM(vm);
 
 	return vm;
@@ -50,6 +51,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 
 void ms_freeVM(ms_VM *vm)
 {
+	ms_freeAllObjects(vm);
 	MS_ASSERT(vm->bytesUsed == sizeof *vm);
 	MS_MEM_FREE(vm, vm, sizeof *vm);
 }

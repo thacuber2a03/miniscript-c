@@ -11,6 +11,7 @@ struct ms_VM {
 	ms_Value stack[MS_MAX_STACK_SIZE], *stackTop;
 	size_t bytesUsed;
 	ms_ReallocFn reallocFn;
+	ms_Object* objects;
 };
 
 ms_VM *ms_newVM(ms_ReallocFn reallocFn);
