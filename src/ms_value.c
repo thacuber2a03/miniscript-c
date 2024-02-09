@@ -33,6 +33,16 @@ bool ms_isValueFalsy(ms_Value val)
 	}
 }
 
+double ms_getBoolVal(ms_Value val)
+{
+	switch (MS_VAL_TYPE(val))
+	{
+		case MS_TYPE_NUM: return MS_TO_NUM(val);
+		case MS_TYPE_NULL: return 0;
+		default: MS_ASSERT_REASON(false, "unreachable default");
+	}
+}
+
 /////////////////
 
 void ms_initList(ms_VM *vm, ms_List *list)

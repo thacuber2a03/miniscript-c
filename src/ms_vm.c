@@ -4,10 +4,10 @@
 
 #include "ms_common.h"
 #include "ms_vm.h"
+#include "ms_value.h"
 #include "ms_compiler.h"
 #include "ms_mem.h"
 #include "ms_code.h"
-#include "ms_value.h"
 
 #ifdef MS_DEBUG_EXECUTION
 #include "ms_debug.h"
@@ -66,6 +66,10 @@ ms_Value ms_popValueFromVM(ms_VM *vm)
 	return *--vm->stackTop;
 }
 
+void ms_pushNullIntoVM(ms_VM *vm) { ms_pushValueIntoVM(vm, MS_NULL_VAL); }
+void ms_pushTrueIntoVM(ms_VM *vm) { ms_pushValueIntoVM(vm, MS_FROM_NUM(1)); }
+void ms_pushFalseIntoVM(ms_VM *vm) { ms_pushValueIntoVM(vm, MS_FROM_NUM(0)); }
+
 ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 {
 	MS_UNUSED(vm);
@@ -115,80 +119,70 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 		switch (NEXT_BYTE())
 		{
 			case MS_OP_CONST: ms_pushValueIntoVM(vm, NEXT_CONST()); break;
-			case MS_OP_NULL:  ms_pushValueIntoVM(vm, MS_NULL_VAL); break;
-			case MS_OP_TRUE:  ms_pushValueIntoVM(vm, MS_FROM_NUM(1)); break;
-			case MS_OP_FALSE: ms_pushValueIntoVM(vm, MS_FROM_NUM(0)); break;
+			case MS_OP_NULL:  ms_pushNullIntoVM(vm); break;
+			case MS_OP_TRUE:  ms_pushTrueIntoVM(vm); break;
+			case MS_OP_FALSE: ms_pushFalseIntoVM(vm); break;
 
 			case MS_OP_ADD:      BINARY_OP(vm, +); break;
 			case MS_OP_SUBTRACT: BINARY_OP(vm, -); break;
 			case MS_OP_MULTIPLY: BINARY_OP(vm, *); break;
 			case MS_OP_DIVIDE:   BINARY_OP(vm, /); break;
-			case MS_OP_POWER: {
+			case MS_OP_POWER:
 				temp2 = ms_popValueFromVM(vm);
 				temp = ms_popValueFromVM(vm);
 
 				if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))
 					return ms_runtimeError(vm, "Both types must be equal.");
 
-				MS_ASSERT(MS_VAL_TYPE(temp) == MS_TYPE_NUM); // TODO
+				if (MS_VAL_TYPE(temp) != MS_TYPE_NUM)
+					return ms_runtimeError(vm, "Can't currently operate on non-numbers.");
+				else
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2))));
 
-				temp = MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2)));
-				ms_pushValueIntoVM(vm, temp);
-			} break;
+				break;
 
-			case MS_OP_MODULO: {
+			case MS_OP_MODULO:
 				temp2 = ms_popValueFromVM(vm);
 				temp = ms_popValueFromVM(vm);
 
 				if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))
 					return ms_runtimeError(vm, "Both types must be equal.");
 
-				MS_ASSERT(MS_VAL_TYPE(temp) == MS_TYPE_NUM); // TODO
+				if (MS_VAL_TYPE(temp) != MS_TYPE_NUM)
+					return ms_runtimeError(vm, "Can't currently operate on non-numbers.");
+				else
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2))));
 
-				temp = MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2)));
-				ms_pushValueIntoVM(vm, temp);
-			} break;
+				break;
 
-#define CLAMP01(v) ((v) < 0 ? 0 : ((v) > 1 ? 1 : (v)))
+#define ABSCLAMP01(v) fabs((v) < 0 ? 0 : ((v) > 1 ? 1 : (v)))
 
 			case MS_OP_NEGATE:
 				temp = ms_popValueFromVM(vm);
-				if (!MS_IS_NUM(temp)) return ms_runtimeError(vm, "Attempt to negate a non-number");
-
-				temp = MS_FROM_NUM(1-CLAMP01(MS_TO_NUM(temp)));
-				ms_pushValueIntoVM(vm, temp);
+				if (!MS_IS_NUM(temp)) return ms_runtimeError(vm, "Attempt to negate non-number");
+				ms_pushValueIntoVM(vm, MS_FROM_NUM(-ABSCLAMP01(MS_TO_NUM(temp))));
 				break;
 			
 			case MS_OP_AND:
 				temp2 = ms_popValueFromVM(vm);
 				temp = ms_popValueFromVM(vm);
-				if (MS_VAL_TYPE(temp) == MS_VAL_TYPE(temp) && MS_VAL_TYPE(temp) == MS_TYPE_NUM)
-					ms_pushValueIntoVM(vm, MS_FROM_NUM(CLAMP01(MS_TO_NUM(temp) * MS_TO_NUM(temp2))));
-				else
-				{
-					if (ms_isValueFalsy(temp2)) ms_pushValueIntoVM(vm, temp);
-					else ms_pushValueIntoVM(vm, temp2);
-				}
+				ms_pushValueIntoVM(vm,
+					MS_FROM_NUM(ABSCLAMP01(ms_getBoolVal(temp) * ms_getBoolVal(temp2)))
+				);
 				break;
 			
 			case MS_OP_OR:
-				temp2 = ms_popValueFromVM(vm);
-				temp = ms_popValueFromVM(vm);
-				if (MS_VAL_TYPE(temp) == MS_VAL_TYPE(temp) && MS_VAL_TYPE(temp) == MS_TYPE_NUM)
-					MS_ASSERT_REASON(false, "branch not yet done");
-				else
-				{
-					if (ms_isValueFalsy(temp)) ms_pushValueIntoVM(vm, temp2);
-					else ms_pushValueIntoVM(vm, temp);
-				}
+				temp2 = MS_FROM_NUM(ms_getBoolVal(ms_popValueFromVM(vm)));
+				temp = MS_FROM_NUM(ms_getBoolVal(ms_popValueFromVM(vm)));
+				ms_pushValueIntoVM(vm, MS_FROM_NUM(ABSCLAMP01(
+					// formula taken from official C# implementation
+					MS_TO_NUM(temp) + MS_TO_NUM(temp2) - MS_TO_NUM(temp) * MS_TO_NUM(temp2)
+				)));
 				break;
 				
 			case MS_OP_NOT:
 				temp = ms_popValueFromVM(vm);
-				if (MS_IS_NUM(temp))
-					ms_pushValueIntoVM(vm, MS_FROM_NUM(1-MS_TO_NUM(temp)));
-				else
-					ms_pushValueIntoVM(vm, MS_FROM_NUM(ms_isValueFalsy(temp)));
+				ms_pushValueIntoVM(vm, MS_FROM_NUM(1-ABSCLAMP01(ms_getBoolVal(temp))));
 				break;
 
 #undef CLAMP

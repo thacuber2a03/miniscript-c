@@ -27,6 +27,7 @@ typedef struct {
 void ms_printValue(ms_Value val);
 bool ms_valuesEqual(ms_Value a, ms_Value b);
 bool ms_isValueFalsy(ms_Value val);
+double ms_getBoolVal(ms_Value val);
 
 typedef struct {
 	size_t count, cap;
