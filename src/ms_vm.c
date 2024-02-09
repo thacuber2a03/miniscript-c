@@ -76,20 +76,21 @@ ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 {
 	register uint8_t *ip = code->data;
-	register ms_Value temp;
+	register ms_Value temp, temp2;
 
 #define NEXT_BYTE() (*ip++)
 #define NEXT_CONST() (code->constants.data[NEXT_BYTE()])
-#define BINARY_OP(vm, op) do {                                         \
-    ms_Value b = ms_popValueFromVM(vm);                                \
-    ms_Value a = ms_popValueFromVM(vm);                                \
-                                                                       \
-    if (a.type != b.type)                                              \
-      return ms_runtimeError(vm, "Types must be the same.");           \
-    MS_ASSERT(MS_IS_NUM(a)); /* TODO */                                \
-                                                                       \
-    temp = MS_FROM_NUM(MS_TO_NUM(a) op MS_TO_NUM(b));                  \
-    ms_pushValueIntoVM(vm, temp);                                      \
+#define BINARY_OP(vm, op) do {                               \
+    temp2 = ms_popValueFromVM(vm);                           \
+    temp = ms_popValueFromVM(vm);                            \
+                                                             \
+    if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))             \
+      return ms_runtimeError(vm, "Types must be the same."); \
+                                                             \
+    MS_ASSERT(MS_IS_NUM(temp)); /* TODO */                   \
+                                                             \
+    temp = MS_FROM_NUM(MS_TO_NUM(temp) op MS_TO_NUM(temp2)); \
+    ms_pushValueIntoVM(vm, temp);                            \
   } while(0)
 
 #ifdef MS_DEBUG_EXECUTION
@@ -123,43 +124,74 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 			case MS_OP_MULTIPLY: BINARY_OP(vm, *); break;
 			case MS_OP_DIVIDE:   BINARY_OP(vm, /); break;
 			case MS_OP_POWER: {
-				ms_Value b = ms_popValueFromVM(vm);
-				ms_Value a = ms_popValueFromVM(vm);
+				temp2 = ms_popValueFromVM(vm);
+				temp = ms_popValueFromVM(vm);
 
-				if (MS_VAL_TYPE(a) != MS_VAL_TYPE(b))
+				if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))
 					return ms_runtimeError(vm, "Both types must be equal.");
-				MS_ASSERT(MS_VAL_TYPE(a) == MS_TYPE_NUM); // TODO
 
-				temp = MS_FROM_NUM(pow(MS_TO_NUM(a), MS_TO_NUM(b)));
+				MS_ASSERT(MS_VAL_TYPE(temp) == MS_TYPE_NUM); // TODO
+
+				temp = MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2)));
 				ms_pushValueIntoVM(vm, temp);
 			} break;
 
 			case MS_OP_MODULO: {
-				ms_Value b = ms_popValueFromVM(vm);
-				ms_Value a = ms_popValueFromVM(vm);
+				temp2 = ms_popValueFromVM(vm);
+				temp = ms_popValueFromVM(vm);
 
-				if (MS_VAL_TYPE(a) != MS_VAL_TYPE(b))
+				if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))
 					return ms_runtimeError(vm, "Both types must be equal.");
-				MS_ASSERT(MS_VAL_TYPE(a) == MS_TYPE_NUM); // TODO
 
-				temp = MS_FROM_NUM(fmod(MS_TO_NUM(a), MS_TO_NUM(b)));
+				MS_ASSERT(MS_VAL_TYPE(temp) == MS_TYPE_NUM); // TODO
+
+				temp = MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2)));
 				ms_pushValueIntoVM(vm, temp);
-				break;
-			}
+			} break;
+
+#define CLAMP01(v) ((v) < 0 ? 0 : ((v) > 1 ? 1 : (v)))
 
 			case MS_OP_NEGATE:
 				temp = ms_popValueFromVM(vm);
+				if (!MS_IS_NUM(temp)) return ms_runtimeError(vm, "Attempt to negate a non-number");
 
-				if (MS_IS_NUM(temp)) MS_TO_NUM(temp) *= -1;
-				else return ms_runtimeError(vm, "Attempt to negate a non-number");
-
+				temp = MS_FROM_NUM(1-CLAMP01(MS_TO_NUM(temp)));
 				ms_pushValueIntoVM(vm, temp);
 				break;
-
+			
+			case MS_OP_AND:
+				temp2 = ms_popValueFromVM(vm);
+				temp = ms_popValueFromVM(vm);
+				if (MS_VAL_TYPE(temp) == MS_VAL_TYPE(temp) && MS_VAL_TYPE(temp) == MS_TYPE_NUM)
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(CLAMP01(MS_TO_NUM(temp) * MS_TO_NUM(temp2))));
+				else
+				{
+					if (ms_isValueFalsy(temp2)) ms_pushValueIntoVM(vm, temp);
+					else ms_pushValueIntoVM(vm, temp2);
+				}
+				break;
+			
+			case MS_OP_OR:
+				temp2 = ms_popValueFromVM(vm);
+				temp = ms_popValueFromVM(vm);
+				if (MS_VAL_TYPE(temp) == MS_VAL_TYPE(temp) && MS_VAL_TYPE(temp) == MS_TYPE_NUM)
+					MS_ASSERT_REASON(false, "branch not yet done");
+				else
+				{
+					if (ms_isValueFalsy(temp)) ms_pushValueIntoVM(vm, temp2);
+					else ms_pushValueIntoVM(vm, temp);
+				}
+				break;
+				
 			case MS_OP_NOT:
 				temp = ms_popValueFromVM(vm);
-				ms_pushValueIntoVM(vm, MS_FROM_NUM(ms_isValueFalsy(temp)));
+				if (MS_IS_NUM(temp))
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(1-MS_TO_NUM(temp)));
+				else
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(ms_isValueFalsy(temp)));
 				break;
+
+#undef CLAMP
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;
 
@@ -170,7 +202,7 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 				return MS_INTERPRET_OK;
 
 			default:
-				MS_ASSERT_REASON(false, "program must never reach this branch");
+				MS_ASSERT_REASON(false, "program must never reach default branch");
 		}
 	}
 

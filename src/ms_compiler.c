@@ -137,7 +137,7 @@ static void endCompiler(ms_Compiler *compiler)
 
 ////////////////////////////
 
-static void expression();
+static void expression(ms_Compiler *compiler);
 static ParseRule *getRule(ms_TokenType type);
 static void parsePrecedence(ms_Compiler* compiler, ParsePrecedence precedence);
 
@@ -155,6 +155,9 @@ static void binary(ms_Compiler *compiler)
 		case MS_TOK_SLASH:   emitByte(compiler, MS_OP_DIVIDE);   break;
 		case MS_TOK_PERCENT: emitByte(compiler, MS_OP_MODULO);   break;
 		case MS_TOK_CARET:   emitByte(compiler, MS_OP_POWER);    break;
+
+		case MS_TOK_AND:     emitByte(compiler, MS_OP_AND);      break;
+		case MS_TOK_OR:      emitByte(compiler, MS_OP_OR);       break;
 		default: return; // unreachable
 	}
 }
@@ -171,19 +174,48 @@ static void number(ms_Compiler *compiler)
 	emitConstant(compiler, MS_FROM_NUM(value));
 }
 
+static void literal(ms_Compiler *compiler)
+{
+	ms_TokenType operatorType = compiler->previous.type;
+	switch (operatorType)
+	{
+		case MS_TOK_NULL:  emitByte(compiler, MS_OP_NULL);  break;
+		case MS_TOK_TRUE:  emitByte(compiler, MS_OP_TRUE);  break;
+		case MS_TOK_FALSE: emitByte(compiler, MS_OP_FALSE); break;
+		default: return; // unreachable
+	}
+}
+
 static void unary(ms_Compiler *compiler)
 {
+	ms_TokenType operatorType = compiler->previous.type;
 	parsePrecedence(compiler, PREC_UNARY);
-	emitByte(compiler, MS_OP_NEGATE);
+	switch (operatorType)
+	{
+		case MS_TOK_MINUS: emitByte(compiler, MS_OP_NEGATE); break;
+		case MS_TOK_NOT:   emitByte(compiler, MS_OP_NOT);    break;
+		default: MS_ASSERT_REASON(false, "unreachable branch in 'unary'");
+	}
 }
 
 ParseRule rules[MS_TOK__END] = {
 	[MS_TOK_PLUS]    = {NULL,     binary, PREC_TERM  },
-	[MS_TOK_MINUS]   = {NULL,     binary, PREC_TERM  },
+	[MS_TOK_MINUS]   = {unary,    binary, PREC_TERM  },
 	[MS_TOK_STAR]    = {NULL,     binary, PREC_FACTOR},
 	[MS_TOK_SLASH]   = {NULL,     binary, PREC_FACTOR},
 	[MS_TOK_PERCENT] = {NULL,     binary, PREC_FACTOR},
 	[MS_TOK_CARET]   = {NULL,     binary, PREC_POWER },
+
+	[MS_TOK_AND]     = {NULL,     binary, PREC_AND   },
+	[MS_TOK_OR]      = {NULL,     binary, PREC_OR    },
+	[MS_TOK_NOT]     = {unary,    NULL,   PREC_NONE  },
+
+	[MS_TOK_LPAREN]  = {grouping, NULL,   PREC_NONE  },
+
+	[MS_TOK_TRUE]    = {literal,  NULL,   PREC_NONE  },
+	[MS_TOK_FALSE]   = {literal,  NULL,   PREC_NONE  },
+	[MS_TOK_NULL]    = {literal,  NULL,   PREC_NONE  },
+
 	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE  },
 };
 

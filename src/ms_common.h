@@ -21,24 +21,24 @@
 
 #define MS__ASSERT_STR "miniscript: invariant '%s' not upheld\n\tat file '%s', line %i\n"
 
-#define MS_ASSERT_REASON(cond, reason) \
-  if (!(cond))                         \
-  {                                    \
-    fprintf(stderr, MS__ASSERT_STR     \
-      "reason: " reason,               \
-      #cond, __FILE__, __LINE__        \
-    );                                 \
-    exit(-1);                          \
-  }
+#define MS_ASSERT_REASON(cond, reason) do { \
+  if (!(cond))                              \
+  {                                         \
+    fprintf(stderr, MS__ASSERT_STR          \
+      "reason: " reason,                    \
+      #cond, __FILE__, __LINE__             \
+    );                                      \
+    exit(-1);                               \
+  } while(0)
 
-#define MS_ASSERT(cond)             \
+#define MS_ASSERT(cond) do {        \
   if (!(cond))                      \
   {                                 \
     fprintf(stderr, MS__ASSERT_STR, \
       #cond, __FILE__, __LINE__     \
     );                              \
     exit(-1);                       \
-  }
+  } while(0)
 
 #else
 

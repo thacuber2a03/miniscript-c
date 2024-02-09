@@ -37,9 +37,21 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 		case MS_OP_CONST:
 			return constantInstruction(off, code->constants, offset);
 
-		case MS_OP_NULL: case MS_OP_ADD: case MS_OP_SUBTRACT: case MS_OP_MULTIPLY:
-		case MS_OP_DIVIDE: case MS_OP_NEGATE: case MS_OP_NOT: case MS_OP_RETURN:
-		case MS_OP_TRUE: case MS_OP_FALSE: case MS_OP_POP: case MS_OP_MODULO: case MS_OP_POWER:
+		case MS_OP_TRUE:
+		case MS_OP_FALSE:
+		case MS_OP_NULL:
+		case MS_OP_ADD:
+		case MS_OP_SUBTRACT:
+		case MS_OP_MULTIPLY:
+		case MS_OP_DIVIDE:
+		case MS_OP_NEGATE:
+		case MS_OP_MODULO:
+		case MS_OP_POWER:
+		case MS_OP_AND:
+		case MS_OP_OR:
+		case MS_OP_NOT:
+		case MS_OP_POP:
+		case MS_OP_RETURN:
 			return simpleInstruction(off, offset);
 
 		default:

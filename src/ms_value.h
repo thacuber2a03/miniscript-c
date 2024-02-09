@@ -19,10 +19,10 @@ typedef struct {
 
 #define MS_TO_NUM(val) val.as.number
 #define MS_FROM_NUM(val) ((ms_Value){ .type = MS_TYPE_NUM, .as.number = val })
-#define MS_IS_NUM(val) val.type == MS_TYPE_NUM
+#define MS_IS_NUM(val) (val.type == MS_TYPE_NUM)
 
 #define MS_NULL_VAL ((ms_Value){ .type = MS_TYPE_NULL })
-#define MS_IS_NULL(val) val.type == MS_TYPE_NULL
+#define MS_IS_NULL(val) (val.type == MS_TYPE_NULL)
 
 void ms_printValue(ms_Value val);
 bool ms_valuesEqual(ms_Value a, ms_Value b);
