@@ -16,7 +16,7 @@ const char *ms_getTokenTypeName(ms_TokenType type)
 void ms_initScanner(ms_Scanner *scanner, char *source)
 {
 	scanner->start = scanner->current = source;
-	scanner->line = 0;
+	scanner->line = 1;
 }
 
 static inline bool isAtEnd(ms_Scanner *scanner) { return *scanner->current == '\0'; }
