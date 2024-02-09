@@ -15,11 +15,12 @@ void *ms_vmRealloc(ms_VM *vm, void *ptr, size_t oldSize, size_t newSize)
 	int diff = newSize - oldSize;
 	vm->bytesUsed += diff;
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr,
-		"mem: %s %i bytes\n",
-		diff < 0 ? "freed" : "allocated",
-		diff < 0 ? -diff : diff
-	);
+	if (diff != 0)
+		fprintf(stderr,
+			"mem: %s %i bytes\n",
+			diff < 0 ? "freed" : "allocated",
+			diff < 0 ? -diff : diff
+		);
 #endif
 	void *res = vm->reallocFn(ptr, oldSize, newSize);
 

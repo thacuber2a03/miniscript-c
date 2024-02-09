@@ -26,6 +26,11 @@ void *defaultRealloc(void *ptr, size_t oldSize, size_t newSize)
 	return realloc(ptr, newSize);
 }
 
+static void initVM(ms_VM *vm)
+{
+	vm->stackTop = vm->stack;
+}
+
 ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 {
 	if (reallocFn == NULL) reallocFn = defaultRealloc;
@@ -38,7 +43,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 
 	vm->reallocFn = reallocFn;
 	vm->bytesUsed = sizeof *vm;
-	vm->stackTop = vm->stack;
+	initVM(vm);
 
 	return vm;
 }
@@ -68,7 +73,7 @@ ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 	return MS_INTERPRET_RUNTIME_ERROR;
 }
 
-static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code code)
+static ms_InterpretResult interpret(register ms_VM* vm, ms_Code code)
 {
 	register uint8_t *ip = code.data;
 	register ms_Value temp;
@@ -78,10 +83,13 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code code)
 #define BINARY_OP(vm, op) do {                                         \
     ms_Value b = ms_popValueFromVM(vm);                                \
     ms_Value a = ms_popValueFromVM(vm);                                \
+                                                                       \
     if (a.type != b.type)                                              \
       return ms_runtimeError(vm, "Types must be the same.");           \
     MS_ASSERT(MS_IS_NUM(a)); /* TODO */                                \
-    ms_pushValueIntoVM(vm, MS_FROM_NUM(MS_TO_NUM(a) op MS_TO_NUM(b))); \
+                                                                       \
+    temp = MS_FROM_NUM(MS_TO_NUM(a) op MS_TO_NUM(b));                  \
+    ms_pushValueIntoVM(vm, temp);                                      \
   } while(0)
 
 #ifdef MS_DEBUG_EXECUTION
@@ -99,7 +107,7 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code code)
 			printf("]");
 		}
 		printf("\nvm: current instruction: ");
-		ms_disassembleInstruction(code, ip-code.data);
+		ms_disassembleInstruction(&code, ip-code.data);
 		printf("\n");
 #endif
 
@@ -115,13 +123,29 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code code)
 			case MS_OP_MULTIPLY: BINARY_OP(vm, *); break;
 			case MS_OP_DIVIDE:   BINARY_OP(vm, /); break;
 			case MS_OP_POWER: {
-				ms_Value a = ms_popValueFromVM(vm);
 				ms_Value b = ms_popValueFromVM(vm);
+				ms_Value a = ms_popValueFromVM(vm);
+
 				if (MS_VAL_TYPE(a) != MS_VAL_TYPE(b))
 					return ms_runtimeError(vm, "Both types must be equal.");
-				MS_ASSERT(MS_VAL_TYPE(a) == MS_TYPE_NUM);
-				ms_pushValueIntoVM(vm, MS_FROM_NUM(pow(MS_TO_NUM(a), MS_TO_NUM(b))));
+				MS_ASSERT(MS_VAL_TYPE(a) == MS_TYPE_NUM); // TODO
+
+				temp = MS_FROM_NUM(pow(MS_TO_NUM(a), MS_TO_NUM(b)));
+				ms_pushValueIntoVM(vm, temp);
 			} break;
+
+			case MS_OP_MODULO: {
+				ms_Value b = ms_popValueFromVM(vm);
+				ms_Value a = ms_popValueFromVM(vm);
+
+				if (MS_VAL_TYPE(a) != MS_VAL_TYPE(b))
+					return ms_runtimeError(vm, "Both types must be equal.");
+				MS_ASSERT(MS_VAL_TYPE(a) == MS_TYPE_NUM); // TODO
+
+				temp = MS_FROM_NUM(fmod(MS_TO_NUM(a), MS_TO_NUM(b)));
+				ms_pushValueIntoVM(vm, temp);
+				break;
+			}
 
 			case MS_OP_NEGATE:
 				temp = ms_popValueFromVM(vm);
@@ -141,8 +165,6 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code code)
 
 			case MS_OP_RETURN:
 #ifdef MS_DEBUG_EXECUTION
-				ms_printValue(ms_popValueFromVM(vm));
-				printf("\n");
 				printf("vm: sucessfully finished execution\n");
 #endif
 				return MS_INTERPRET_OK;
@@ -178,8 +200,15 @@ ms_InterpretResult ms_interpretString(ms_VM *vm, char *str)
 {
 	ms_Code code;
 	ms_initCode(vm, &code);
+
 	ms_InterpretResult res = ms_compileString(vm, str, &code);
-	if (res != MS_INTERPRET_OK) return res;
+	if (res != MS_INTERPRET_OK)
+	{
+		ms_freeCode(vm, &code);
+		return res;
+	}
+
+	initVM(vm);
 	res = interpret(vm, code);
 	ms_freeCode(vm, &code);
 	return res;

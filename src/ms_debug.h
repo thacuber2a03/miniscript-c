@@ -4,6 +4,7 @@
 #include "ms_code.h"
 
 const char *ms_getOpcodeName(ms_Opcode op);
-size_t ms_disassembleInstruction(ms_Code code, size_t offset);
+size_t ms_disassembleInstruction(ms_Code *code, size_t offset);
+void ms_disassembleCode(ms_Code *code, const char *name);
 
 #endif

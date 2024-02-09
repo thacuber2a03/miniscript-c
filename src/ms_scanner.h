@@ -24,5 +24,6 @@ typedef struct {
 
 void ms_initScanner(ms_Scanner *scanner, char *source);
 ms_Token ms_nextToken(ms_Scanner *scanner);
+void ms_debugScanner(char *str);
 
 #endif

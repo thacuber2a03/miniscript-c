@@ -85,3 +85,5 @@ TOKEN(MS_TOK__USER_END)
 // tokens used internally
 TOKEN(MS_TOK_ERROR)
 TOKEN(MS_TOK_EOF)
+
+TOKEN(MS_TOK__END)

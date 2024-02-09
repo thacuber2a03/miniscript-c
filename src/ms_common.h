@@ -8,6 +8,7 @@
 #ifdef MS_DEBUG
 #define MS_DEBUG_MEM_ALLOC
 #define MS_DEBUG_EXECUTION
+#define MS_DEBUG_PRINT_CODE
 #define MS_DEBUG_ASSERTIONS
 #endif
 
