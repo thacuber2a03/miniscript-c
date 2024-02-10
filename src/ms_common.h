@@ -42,10 +42,21 @@
     }                                 \
   } while(0)
 
+#define MS_UNREACHABLE(place) do {            \
+    fprintf(stderr,                           \
+      "miniscript: reached branch in '" place \
+      "' marked as unreachable\n"             \
+      "\tat file '%s', line %i\n",            \
+      __FILE__, __LINE__                      \
+    );                                        \
+    exit(-1);                                 \
+  } while(0)
+
 #else
 
 #define MS_ASSERT_REASON(cond, reason)
 #define MS_ASSERT(cond)
+#define MS_UNREACHABLE(place)
 
 #endif // MS_DEBUG_ASSERTIONS
 

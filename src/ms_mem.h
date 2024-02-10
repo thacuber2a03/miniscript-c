@@ -26,5 +26,6 @@
 
 void *ms_vmRealloc(ms_VM *vm, void *ptr, size_t oldSize, size_t newSize);
 void ms_freeAllObjects(ms_VM* vm);
+uint32_t ms_hashMem(void* ptr, size_t length);
 
 #endif

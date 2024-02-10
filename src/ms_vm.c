@@ -5,6 +5,7 @@
 
 #include "ms_common.h"
 #include "ms_vm.h"
+#include "ms_map.h"
 #include "ms_value.h"
 #include "ms_object.h"
 #include "ms_compiler.h"
@@ -28,11 +29,6 @@ void *defaultRealloc(void *ptr, size_t oldSize, size_t newSize)
 	return realloc(ptr, newSize);
 }
 
-static void initVM(ms_VM *vm)
-{
-	vm->stackTop = vm->stack;
-}
-
 ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 {
 	if (reallocFn == NULL) reallocFn = defaultRealloc;
@@ -40,13 +36,14 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 	MS_ASSERT(vm != NULL);
 
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr, "mem: allocated %zu bytes\n", sizeof(ms_VM));
+	fprintf(stderr, "mem: allocated vm\n");
 #endif
 
 	vm->reallocFn = reallocFn;
-	vm->bytesUsed = sizeof *vm;
+	vm->bytesUsed = 0;
 	vm->objects = NULL;
-	initVM(vm);
+	vm->stackTop = vm->stack;
+	ms_initMap(vm, &vm->strings);
 
 	return vm;
 }
@@ -60,8 +57,11 @@ void ms_freeVM(ms_VM *vm)
 #ifdef MS_DEBUG_MEM_ALLOC
 	fprintf(stderr, "vm: all objects freed\n");
 #endif
-	MS_ASSERT(vm->bytesUsed == sizeof *vm);
-	MS_MEM_FREE(vm, vm, sizeof *vm);
+	vm->objects = NULL;
+	ms_freeMap(vm, &vm->strings);
+
+	MS_ASSERT_REASON(vm->bytesUsed == 0, "program leaked memory!!");
+	vm->reallocFn(vm, sizeof *vm, 0);
 }
 
 void ms_pushValueIntoVM(ms_VM *vm, ms_Value val)
@@ -187,7 +187,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 				if (!MS_IS_NUM(temp)) return ms_runtimeError(vm, "Attempt to negate non-number");
 				ms_pushValueIntoVM(vm, MS_FROM_NUM(-ABSCLAMP01(MS_TO_NUM(temp))));
 				break;
-			
+
 			case MS_OP_AND:
 				temp2 = ms_popValueFromVM(vm);
 				temp = ms_popValueFromVM(vm);
@@ -195,7 +195,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 					MS_FROM_NUM(ABSCLAMP01(ms_getBoolVal(temp) * ms_getBoolVal(temp2)))
 				);
 				break;
-			
+
 			case MS_OP_OR:
 				temp2 = MS_FROM_NUM(ms_getBoolVal(ms_popValueFromVM(vm)));
 				temp = MS_FROM_NUM(ms_getBoolVal(ms_popValueFromVM(vm)));
@@ -204,7 +204,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 					MS_TO_NUM(temp) + MS_TO_NUM(temp2) - MS_TO_NUM(temp) * MS_TO_NUM(temp2)
 				)));
 				break;
-				
+
 			case MS_OP_NOT:
 				temp = ms_popValueFromVM(vm);
 				ms_pushValueIntoVM(vm, MS_FROM_NUM(1-ABSCLAMP01(ms_getBoolVal(temp))));
@@ -237,8 +237,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 #endif
 				return MS_INTERPRET_OK;
 
-			default:
-				MS_ASSERT_REASON(false, "program must never reach default branch");
+			default: MS_UNREACHABLE("interpret"); break;
 		}
 	}
 
@@ -276,7 +275,6 @@ ms_InterpretResult ms_interpretString(ms_VM *vm, char *str)
 		return res;
 	}
 
-	initVM(vm);
 	res = interpret(vm, &code);
 	ms_freeCode(vm, &code);
 	return res;

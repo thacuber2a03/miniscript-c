@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ms_mem.h"
 #include "ms_object.h"
+#include "ms_mem.h"
 #include "ms_value.h"
 
 void ms_printValue(ms_Value val)
@@ -13,7 +13,7 @@ void ms_printValue(ms_Value val)
 		case MS_TYPE_NULL: printf("null");                 break;
 		case MS_TYPE_OBJ:  ms_printObject(val);            break;
 
-		default: MS_ASSERT_REASON(false, "unprintable value"); break;
+		default: MS_UNREACHABLE("ms_printValue"); break;
 	}
 }
 
@@ -24,23 +24,8 @@ bool ms_valuesEqual(ms_Value a, ms_Value b)
 	{
 		case MS_TYPE_NUM:  return MS_TO_NUM(a) == MS_TO_NUM(b);
 		case MS_TYPE_NULL: return true;
-		case MS_TYPE_OBJ: {
-			ms_ObjString *as = MS_TO_STRING(a);
-			ms_ObjString *bs = MS_TO_STRING(b);
-			return as->length == bs->length &&
-				!memcmp(as->chars, bs->chars, as->length);
-		}
-		default: MS_ASSERT_REASON(false, "uncomparable value"); break;
-	}
-}
-
-bool ms_isValueFalsy(ms_Value val)
-{
-	switch(MS_VAL_TYPE(val))
-	{
-		case MS_TYPE_NUM:  return MS_TO_NUM(val) == 0;
-		case MS_TYPE_NULL: return true;
-		default: return false; // unreachable
+		case MS_TYPE_OBJ:  return MS_TO_OBJ(a) == MS_TO_OBJ(b);
+		default: MS_UNREACHABLE("ms_valuesEqual"); break;
 	}
 }
 
@@ -48,9 +33,11 @@ double ms_getBoolVal(ms_Value val)
 {
 	switch (MS_VAL_TYPE(val))
 	{
-		case MS_TYPE_NUM: return MS_TO_NUM(val);
+		case MS_TYPE_NUM:  return MS_TO_NUM(val);
 		case MS_TYPE_NULL: return 0;
-		default: MS_ASSERT_REASON(false, "unreachable default");
+		case MS_TYPE_OBJ:  return ms_getBoolObj(val);
+
+		default: MS_UNREACHABLE("ms_getBoolVal");
 	}
 }
 

@@ -223,7 +223,7 @@ static void unary(ms_Compiler *compiler)
 	{
 		case MS_TOK_MINUS: emitByte(compiler, MS_OP_NEGATE); break;
 		case MS_TOK_NOT:   emitByte(compiler, MS_OP_NOT);    break;
-		default: MS_ASSERT_REASON(false, "unreachable branch in 'unary'");
+		default: MS_UNREACHABLE("unary");
 	}
 }
 
