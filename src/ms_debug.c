@@ -47,6 +47,12 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 		case MS_OP_NEGATE:
 		case MS_OP_MODULO:
 		case MS_OP_POWER:
+		case MS_OP_EQUAL:
+		case MS_OP_NOT_EQUAL:
+		case MS_OP_GREATER:
+		case MS_OP_GREATER_EQUAL:
+		case MS_OP_LESS:
+		case MS_OP_LESS_EQUAL:
 		case MS_OP_AND:
 		case MS_OP_OR:
 		case MS_OP_NOT:

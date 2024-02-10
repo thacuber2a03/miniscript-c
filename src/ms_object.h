@@ -13,11 +13,11 @@ struct ms_Object {
 	struct ms_Object *next;
 };
 
-typedef struct ms_ObjString {
+struct ms_ObjString {
 	ms_Object obj;
 	char *chars;
 	size_t length;
-} ms_ObjString;
+};
 
 ms_ObjString *ms_newString(ms_VM* vm, char *chars, size_t length);
 void ms_printObject(ms_Value val);

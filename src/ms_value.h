@@ -5,6 +5,7 @@
 #include "miniscript.h"
 
 typedef struct ms_Object ms_Object;
+typedef struct ms_ObjString ms_ObjString;
 
 typedef enum {
 	MS_TYPE_NUM,

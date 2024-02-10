@@ -151,15 +151,22 @@ static void binary(ms_Compiler *compiler)
 
 	switch (operatorType)
 	{
-		case MS_TOK_PLUS:    emitByte(compiler, MS_OP_ADD);       break;
-		case MS_TOK_MINUS:   emitByte(compiler, MS_OP_SUBTRACT);  break;
-		case MS_TOK_STAR:    emitByte(compiler, MS_OP_MULTIPLY);  break;
-		case MS_TOK_SLASH:   emitByte(compiler, MS_OP_DIVIDE);    break;
-		case MS_TOK_PERCENT: emitByte(compiler, MS_OP_MODULO);    break;
-		case MS_TOK_CARET:   emitByte(compiler, MS_OP_POWER);     break;
+		case MS_TOK_PLUS:    emitByte(compiler, MS_OP_ADD);           break;
+		case MS_TOK_MINUS:   emitByte(compiler, MS_OP_SUBTRACT);      break;
+		case MS_TOK_STAR:    emitByte(compiler, MS_OP_MULTIPLY);      break;
+		case MS_TOK_SLASH:   emitByte(compiler, MS_OP_DIVIDE);        break;
+		case MS_TOK_PERCENT: emitByte(compiler, MS_OP_MODULO);        break;
+		case MS_TOK_CARET:   emitByte(compiler, MS_OP_POWER);         break;
 
-		case MS_TOK_AND:     emitByte(compiler, MS_OP_AND);       break;
-		case MS_TOK_OR:      emitByte(compiler, MS_OP_OR);        break;
+		case MS_TOK_NEQ:     emitByte(compiler, MS_OP_NOT_EQUAL);     break;
+		case MS_TOK_EQUAL:   emitByte(compiler, MS_OP_EQUAL);         break;
+		case MS_TOK_LESS:    emitByte(compiler, MS_OP_LESS);          break;
+		case MS_TOK_GREATER: emitByte(compiler, MS_OP_GREATER);       break;
+		case MS_TOK_LEQ:     emitByte(compiler, MS_OP_LESS_EQUAL);    break;
+		case MS_TOK_GEQ:     emitByte(compiler, MS_OP_GREATER_EQUAL); break;
+
+		case MS_TOK_AND:     emitByte(compiler, MS_OP_AND);           break;
+		case MS_TOK_OR:      emitByte(compiler, MS_OP_OR);            break;
 		default: return; // unreachable
 	}
 }
@@ -191,6 +198,7 @@ static void string(ms_Compiler *compiler)
 	}
 
 	str = MS_MEM_REALLOC_ARR(compiler->vm, char, str, tok.length, realLen + 1);
+	str[realLen] = '\0';
 
 	emitConstant(compiler, MS_FROM_OBJ(ms_newString(compiler->vm, str, realLen)));
 }
@@ -220,25 +228,32 @@ static void unary(ms_Compiler *compiler)
 }
 
 ParseRule rules[MS_TOK__END] = {
-	[MS_TOK_PLUS]    = {NULL,     binary, PREC_TERM  },
-	[MS_TOK_MINUS]   = {unary,    binary, PREC_TERM  },
-	[MS_TOK_STAR]    = {NULL,     binary, PREC_FACTOR},
-	[MS_TOK_SLASH]   = {NULL,     binary, PREC_FACTOR},
-	[MS_TOK_PERCENT] = {NULL,     binary, PREC_FACTOR},
-	[MS_TOK_CARET]   = {NULL,     binary, PREC_POWER },
+	[MS_TOK_PLUS]    = {NULL,     binary, PREC_TERM      },
+	[MS_TOK_MINUS]   = {unary,    binary, PREC_TERM      },
+	[MS_TOK_STAR]    = {NULL,     binary, PREC_FACTOR    },
+	[MS_TOK_SLASH]   = {NULL,     binary, PREC_FACTOR    },
+	[MS_TOK_PERCENT] = {NULL,     binary, PREC_FACTOR    },
+	[MS_TOK_CARET]   = {NULL,     binary, PREC_POWER     },
 
-	[MS_TOK_AND]     = {NULL,     binary, PREC_AND   },
-	[MS_TOK_OR]      = {NULL,     binary, PREC_OR    },
-	[MS_TOK_NOT]     = {unary,    NULL,   PREC_NONE  },
+	[MS_TOK_EQUAL]   = {NULL,     binary, PREC_COMPARISON},
+	[MS_TOK_NEQ]     = {NULL,     binary, PREC_COMPARISON},
+	[MS_TOK_LESS]    = {NULL,     binary, PREC_COMPARISON},
+	[MS_TOK_GREATER] = {NULL,     binary, PREC_COMPARISON},
+	[MS_TOK_LEQ]     = {NULL,     binary, PREC_COMPARISON},
+	[MS_TOK_GEQ]     = {NULL,     binary, PREC_COMPARISON},
 
-	[MS_TOK_LPAREN]  = {grouping, NULL,   PREC_NONE  },
+	[MS_TOK_AND]     = {NULL,     binary, PREC_AND       },
+	[MS_TOK_OR]      = {NULL,     binary, PREC_OR        },
+	[MS_TOK_NOT]     = {unary,    NULL,   PREC_NONE      },
 
-	[MS_TOK_TRUE]    = {literal,  NULL,   PREC_NONE  },
-	[MS_TOK_FALSE]   = {literal,  NULL,   PREC_NONE  },
-	[MS_TOK_NULL]    = {literal,  NULL,   PREC_NONE  },
+	[MS_TOK_LPAREN]  = {grouping, NULL,   PREC_NONE      },
 
-	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE  },
-	[MS_TOK_STR]     = {string,   NULL,   PREC_NONE  },
+	[MS_TOK_TRUE]    = {literal,  NULL,   PREC_NONE      },
+	[MS_TOK_FALSE]   = {literal,  NULL,   PREC_NONE      },
+	[MS_TOK_NULL]    = {literal,  NULL,   PREC_NONE      },
+
+	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE      },
+	[MS_TOK_STR]     = {string,   NULL,   PREC_NONE      },
 };
 
 static void parsePrecedence(ms_Compiler *compiler, ParsePrecedence precedence)

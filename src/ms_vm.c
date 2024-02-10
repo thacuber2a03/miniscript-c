@@ -1,10 +1,12 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "ms_common.h"
 #include "ms_vm.h"
 #include "ms_value.h"
+#include "ms_object.h"
 #include "ms_compiler.h"
 #include "ms_mem.h"
 #include "ms_code.h"
@@ -51,7 +53,13 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 
 void ms_freeVM(ms_VM *vm)
 {
+#ifdef MS_DEBUG_MEM_ALLOC
+	fprintf(stderr, "vm: freeing all objects...\n");
+#endif
 	ms_freeAllObjects(vm);
+#ifdef MS_DEBUG_MEM_ALLOC
+	fprintf(stderr, "vm: all objects freed\n");
+#endif
 	MS_ASSERT(vm->bytesUsed == sizeof *vm);
 	MS_MEM_FREE(vm, vm, sizeof *vm);
 }
@@ -79,7 +87,7 @@ ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 	return MS_INTERPRET_RUNTIME_ERROR;
 }
 
-static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
+static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 {
 	register uint8_t *ip = code->data;
 	register ms_Value temp, temp2;
@@ -97,6 +105,21 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
                                                              \
     temp = MS_FROM_NUM(MS_TO_NUM(temp) op MS_TO_NUM(temp2)); \
     ms_pushValueIntoVM(vm, temp);                            \
+  } while(0)
+
+#define COMPARISON_OP(vm, op) do {                                              \
+    temp2 = ms_popValueFromVM(vm);                                              \
+    temp = ms_popValueFromVM(vm);                                               \
+                                                                                \
+    if (MS_VAL_TYPE(temp) != MS_VAL_TYPE(temp2))                                \
+      return ms_runtimeError(vm, "Types must be equal.");                       \
+                                                                                \
+    if (MS_VAL_TYPE(temp) == MS_TYPE_OBJ && MS_OBJ_TYPE(temp) == MS_OBJ_STRING) \
+      ms_pushValueIntoVM(vm, MS_FROM_NUM(                                       \
+        (strcmp(MS_TO_CSTRING(temp), MS_TO_CSTRING(temp2)) op 0)                \
+      ));                                                                       \
+    else                                                                        \
+      ms_pushValueIntoVM(vm, MS_FROM_NUM(MS_TO_NUM(temp) op MS_TO_NUM(temp2))); \
   } while(0)
 
 #ifdef MS_DEBUG_EXECUTION
@@ -187,7 +210,24 @@ static ms_InterpretResult interpret(register ms_VM* vm, register ms_Code *code)
 				ms_pushValueIntoVM(vm, MS_FROM_NUM(1-ABSCLAMP01(ms_getBoolVal(temp))));
 				break;
 
-#undef CLAMP
+#undef ABSCLAMP01
+
+			case MS_OP_EQUAL:
+				ms_pushValueIntoVM(vm, MS_FROM_NUM(
+					ms_valuesEqual(ms_popValueFromVM(vm), ms_popValueFromVM(vm))
+				));
+				break;
+
+			case MS_OP_NOT_EQUAL:
+				ms_pushValueIntoVM(vm, MS_FROM_NUM(
+					!ms_valuesEqual(ms_popValueFromVM(vm), ms_popValueFromVM(vm))
+				));
+				break;
+
+			case MS_OP_GREATER:       COMPARISON_OP(vm, > ); break;
+			case MS_OP_LESS:          COMPARISON_OP(vm, < ); break;
+			case MS_OP_GREATER_EQUAL: COMPARISON_OP(vm, >=); break;
+			case MS_OP_LESS_EQUAL:    COMPARISON_OP(vm, <=); break;
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;
 
