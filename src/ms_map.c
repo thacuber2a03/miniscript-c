@@ -125,7 +125,7 @@ bool ms_deleteFromMap(ms_VM *vm, ms_Map *map, ms_Value key)
 	return true;
 }
 
-ms_ObjString *ms_findStringInMap(ms_VM *vm, ms_Map *map, char* str, size_t length, uint32_t hash)
+ms_ObjString *ms_findStringInMap(ms_VM *vm, ms_Map *map, const char* str, size_t length, uint32_t hash)
 {
 	MS_UNUSED(vm);
 	if (map->count == 0) return NULL;

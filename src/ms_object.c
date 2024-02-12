@@ -37,13 +37,13 @@ ms_ObjString *ms_newString(ms_VM *vm, char *str, size_t length)
 	return allocateString(vm, str, length, hash);
 }
 
-ms_ObjString *ms_copyString(ms_VM* vm, char* str, size_t length)
+ms_ObjString *ms_copyString(ms_VM *vm, const char *str, size_t length)
 {
 	uint32_t hash = ms_hashMem(str, length);
-	ms_ObjString *interned = ms_findStringInMap(vm,&vm->strings, str, length, hash);
+	ms_ObjString *interned = ms_findStringInMap(vm, &vm->strings, str, length, hash);
 	if (interned != NULL) return interned;
 
-	char *heapStr = MS_MEM_MALLOC_ARR(vm, char, length);
+	char *heapStr = MS_MEM_MALLOC_ARR(vm, char, length+1);
 	memcpy(heapStr, str, length);
 	heapStr[length] = '\0';
 	return allocateString(vm, heapStr, length, hash);
@@ -56,6 +56,7 @@ void ms_printObject(ms_Value val)
 		case MS_OBJ_STRING:
 			printf("%s", MS_TO_CSTRING(val));
 			break;
+
 		default: MS_UNREACHABLE("ms_printObject"); break;
 	}
 }

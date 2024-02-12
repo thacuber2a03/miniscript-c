@@ -11,7 +11,11 @@ static void repl(ms_VM *vm)
 	for (;;)
 	{
 		printf("> ");
-		if (!fgets(buffer, sizeof buffer, stdin)) break;
+		if (!fgets(buffer, sizeof buffer, stdin))
+		{
+			printf("RECIEVED EOF\n");
+			break;
+		}
 		*strrchr(buffer, '\n') = '\0';
 		ms_interpretString(vm, buffer);
 	}

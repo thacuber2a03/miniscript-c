@@ -10,6 +10,7 @@
 #define MS_DEBUG_EXECUTION
 #define MS_DEBUG_PRINT_CODE
 #define MS_DEBUG_ASSERTIONS
+#define MS_DEBUG_COMPILATION
 #endif
 
 #define MS_UNUSED(x) ((void)(x))

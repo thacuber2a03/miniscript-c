@@ -58,9 +58,9 @@ void ms_freeAllObjects(ms_VM* vm)
 }
 
 // FNV-1a hash
-uint32_t ms_hashMem(void* ptr, size_t length)
+uint32_t ms_hashMem(const void *ptr, size_t length)
 {
-	uint8_t *p = (uint8_t*)ptr;
+	uint8_t *p = (uint8_t *)ptr;
 
 	uint32_t hash = 2166136261u;
 	for (size_t i = 0; i < length; i++)

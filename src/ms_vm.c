@@ -36,7 +36,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 	MS_ASSERT(vm != NULL);
 
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr, "mem: allocated vm\n");
+	fprintf(stderr, "vm: hello! setting up vm...\n");
 #endif
 
 	vm->reallocFn = reallocFn;
@@ -44,6 +44,11 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 	vm->objects = NULL;
 	vm->stackTop = vm->stack;
 	ms_initMap(vm, &vm->strings);
+	ms_initMap(vm, &vm->globals);
+
+#ifdef MS_DEBUG_MEM_ALLOC
+	fprintf(stderr, "vm: all set up and ready to go!\n");
+#endif
 
 	return vm;
 }
@@ -51,7 +56,7 @@ ms_VM *ms_newVM(ms_ReallocFn reallocFn)
 void ms_freeVM(ms_VM *vm)
 {
 #ifdef MS_DEBUG_MEM_ALLOC
-	fprintf(stderr, "vm: freeing all objects...\n");
+	fprintf(stderr, "vm: about to free itself...\nvm: freeing all objects...\n");
 #endif
 	ms_freeAllObjects(vm);
 #ifdef MS_DEBUG_MEM_ALLOC
@@ -59,8 +64,12 @@ void ms_freeVM(ms_VM *vm)
 #endif
 	vm->objects = NULL;
 	ms_freeMap(vm, &vm->strings);
+	ms_freeMap(vm, &vm->globals);
 
 	MS_ASSERT_REASON(vm->bytesUsed == 0, "program leaked memory!!");
+#ifdef MS_DEBUG_MEM_ALLOC
+	fprintf(stderr, "vm: successfully freed everything, will free itself now. goodbye!");
+#endif
 	vm->reallocFn(vm, sizeof *vm, 0);
 }
 
@@ -74,6 +83,12 @@ ms_Value ms_popValueFromVM(ms_VM *vm)
 {
 	MS_ASSERT_REASON(vm->stackTop != vm->stack, "stack underflow");
 	return *--vm->stackTop;
+}
+
+ms_Value ms_peekIntoStack(ms_VM *vm, size_t distance)
+{
+	MS_ASSERT_REASON(vm->stackTop - 1 - distance != vm->stack, "peek index exits stack");
+	return vm->stackTop[-1 - distance];
 }
 
 void ms_pushNullIntoVM(ms_VM *vm) { ms_pushValueIntoVM(vm, MS_NULL_VAL); }
@@ -228,12 +243,27 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 			case MS_OP_LESS:          COMPARISON_OP(vm, < ); break;
 			case MS_OP_GREATER_EQUAL: COMPARISON_OP(vm, >=); break;
 			case MS_OP_LESS_EQUAL:    COMPARISON_OP(vm, <=); break;
+			
+			case MS_OP_ASSIGN_GLOBAL:
+				ms_setMapKey(vm, &vm->globals, NEXT_CONST(), ms_popValueFromVM(vm));
+				break;
+
+			case MS_OP_GET_GLOBAL: {
+				ms_Value val = MS_NULL_VAL;
+				ms_getMapKey(vm, &vm->globals, NEXT_CONST(), &val);
+				ms_pushValueIntoVM(vm, val);
+			} break;
+
+			case MS_OP_INVOKE: {
+				// this case is currently a bunch of do nothing
+				// just to not enter the default branch
+			} break;
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;
 
 			case MS_OP_RETURN:
 #ifdef MS_DEBUG_EXECUTION
-				printf("vm: sucessfully finished execution\n");
+				printf("vm: sucessfully finished execution!\n");
 #endif
 				return MS_INTERPRET_OK;
 

@@ -12,7 +12,7 @@ struct ms_VM {
 	ms_Value stack[MS_MAX_STACK_SIZE], *stackTop;
 	size_t bytesUsed;
 	ms_ReallocFn reallocFn;
-	ms_Map strings;
+	ms_Map strings, globals;
 	ms_Object* objects;
 };
 

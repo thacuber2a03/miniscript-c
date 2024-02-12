@@ -35,6 +35,8 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 	switch (*off)
 	{
 		case MS_OP_CONST:
+		case MS_OP_ASSIGN_GLOBAL:
+		case MS_OP_GET_GLOBAL:
 			return constantInstruction(off, code->constants, offset);
 
 		case MS_OP_TRUE:
@@ -56,6 +58,7 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 		case MS_OP_AND:
 		case MS_OP_OR:
 		case MS_OP_NOT:
+		case MS_OP_INVOKE:
 		case MS_OP_POP:
 		case MS_OP_RETURN:
 			return simpleInstruction(off, offset);

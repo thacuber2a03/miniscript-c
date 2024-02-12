@@ -17,7 +17,7 @@ typedef struct {
 	ms_VM *vm;
 	ms_Token previous, current;
 	ms_Code *currentCode;
-	bool hadError;
+	bool hadError, panicMode;
 } ms_Compiler;
 
 typedef void (*ParseFn)(ms_Compiler *compiler);
@@ -34,6 +34,7 @@ typedef enum {
 	PREC_FACTOR,     // * / %
 	PREC_UNARY,      // -
 	PREC_NEW,
+	PREC_ADDRESS,
 	PREC_POWER,
 	PREC_CALL,
 	PREC_MAP,
@@ -50,7 +51,7 @@ typedef struct {
 static void initCompiler
 	(ms_Compiler *compiler, ms_VM *vm, ms_Scanner scanner, ms_Code *mainCode)
 {
-	compiler->hadError = false;
+	compiler->hadError = compiler->panicMode = false;
 	compiler->scanner = scanner;
 	compiler->currentCode = mainCode;
 	compiler->vm = vm;
@@ -58,6 +59,9 @@ static void initCompiler
 
 static void errorAt(ms_Compiler *compiler, ms_Token *token, const char* message)
 {
+	if (compiler->panicMode) return;
+	compiler->panicMode = true;
+
 	fprintf(stderr, "[line %d] Error", token->line);
 
   if (token->type == MS_TOK_EOF)
@@ -93,6 +97,30 @@ static void consume(ms_Compiler *compiler, ms_TokenType type, const char *messag
 	}
 
 	errorAtCurrent(compiler, message);
+}
+
+static inline bool check(ms_Compiler *compiler, ms_TokenType type)
+{
+	return compiler->current.type == type;
+}
+
+static bool match(ms_Compiler *compiler, ms_TokenType type)
+{
+	if (!check(compiler, type)) return false;
+	advance(compiler);
+	return true;
+}
+
+static inline void skipNewlines(ms_Compiler *compiler)
+{
+	// the power of side effects
+	while (match(compiler, MS_TOK_NEWLINE));
+}
+
+static inline bool checkKeyword(ms_Compiler *compiler)
+{
+	return compiler->current.type > MS_TOK__KEYWORD_START
+	    && compiler->current.type < MS_TOK__KEYWORD_END;
 }
 
 static void emitByte(ms_Compiler *compiler, uint8_t byte)
@@ -132,6 +160,7 @@ static void endCompiler(ms_Compiler *compiler)
 {
 	emitReturn(compiler);
 #ifdef MS_DEBUG_PRINT_CODE
+	fprintf(stderr, "compiler: code disassembly:\n");
 	if (!compiler->hadError)
 		ms_disassembleCode(compiler->currentCode, "code");
 #endif
@@ -142,6 +171,22 @@ static void endCompiler(ms_Compiler *compiler)
 static void expression(ms_Compiler *compiler);
 static ParseRule *getRule(ms_TokenType type);
 static void parsePrecedence(ms_Compiler* compiler, ParsePrecedence precedence);
+
+static uint8_t identifierConstant(ms_Compiler *compiler, ms_Token *name)
+{
+	return makeConstant(compiler, MS_FROM_OBJ(ms_copyString(compiler->vm, name->start, name->length)));
+}
+
+static uint8_t parseVariable(ms_Compiler *compiler, const char *errorMessage)
+{
+	consume(compiler, MS_TOK_ID, errorMessage);
+	return identifierConstant(compiler, &compiler->previous);
+}
+
+static inline void assignVariable(ms_Compiler *compiler, uint8_t global)
+{
+	emitBytes(compiler, MS_OP_ASSIGN_GLOBAL, global);
+}
 
 static void binary(ms_Compiler *compiler)
 {
@@ -203,6 +248,19 @@ static void string(ms_Compiler *compiler)
 	emitConstant(compiler, MS_FROM_OBJ(ms_newString(compiler->vm, str, realLen)));
 }
 
+static void namedVariable(ms_Compiler *compiler, ms_Token name)
+{
+	uint8_t arg = identifierConstant(compiler, &name);
+	emitBytes(compiler, MS_OP_GET_GLOBAL, arg);
+}
+
+static void variable(ms_Compiler *compiler)
+{
+	ms_TokenType prefix = compiler->previous.type;
+	namedVariable(compiler, compiler->previous);
+	if (prefix != MS_TOK_AT_SIGN) emitByte(compiler, MS_OP_INVOKE);
+}
+
 static void literal(ms_Compiler *compiler)
 {
 	ms_TokenType operatorType = compiler->previous.type;
@@ -246,6 +304,8 @@ ParseRule rules[MS_TOK__END] = {
 	[MS_TOK_OR]      = {NULL,     binary, PREC_OR        },
 	[MS_TOK_NOT]     = {unary,    NULL,   PREC_NONE      },
 
+	[MS_TOK_AT_SIGN] = {variable, NULL,   PREC_ADDRESS   },
+
 	[MS_TOK_LPAREN]  = {grouping, NULL,   PREC_NONE      },
 
 	[MS_TOK_TRUE]    = {literal,  NULL,   PREC_NONE      },
@@ -254,6 +314,7 @@ ParseRule rules[MS_TOK__END] = {
 
 	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE      },
 	[MS_TOK_STR]     = {string,   NULL,   PREC_NONE      },
+	[MS_TOK_ID]      = {variable, NULL,   PREC_NONE      },
 };
 
 static void parsePrecedence(ms_Compiler *compiler, ParsePrecedence precedence)
@@ -285,8 +346,56 @@ static void expression(ms_Compiler *compiler)
 
 ////////////////////////////
 
+static void synchronize(ms_Compiler *compiler)
+{
+	compiler->panicMode = false;
+
+	while (compiler->current.type != MS_TOK_EOF)
+	{
+		if (compiler->previous.type == MS_TOK_NEWLINE) return;
+		if (checkKeyword(compiler)) return;
+		advance(compiler);
+	}
+}
+
+static void assignment(ms_Compiler *compiler)
+{
+	uint8_t global = parseVariable(compiler, "Expected variable name.");
+	consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name.");
+	expression(compiler);
+	assignVariable(compiler, global);
+}
+
+static void statement(ms_Compiler *compiler)
+{
+	if (checkKeyword(compiler)
+	&& !check(compiler, MS_TOK_NOT)
+	&& !check(compiler, MS_TOK_TRUE)
+	&& !check(compiler, MS_TOK_FALSE))
+	{
+	}
+	else
+	{
+		assignment(compiler);
+	}
+	
+	if (compiler->panicMode) synchronize(compiler);
+}
+
+static void program(ms_Compiler *compiler)
+{
+	while (!match(compiler, MS_TOK_EOF))
+	{
+		skipNewlines(compiler);
+		statement(compiler);
+	}
+}
+
 ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 {
+#ifdef MS_DEBUG_COMPILATION
+	fprintf(stderr, "compiler: setting up compiler\n");
+#endif
 	ms_Scanner scanner;
 	ms_initScanner(&scanner, source);
 
@@ -294,8 +403,19 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 	initCompiler(&compiler, vm, scanner, code);
 
 	advance(&compiler);
-	expression(&compiler);
-	consume(&compiler, MS_TOK_EOF, "Expected end of expression");
+
+#ifdef MS_DEBUG_COMPILATION
+	fprintf(stderr, "compiler: set-up complete, starting compilation...\n");
+#endif
+
+	program(&compiler);
+
+#ifdef MS_DEBUG_COMPILATION
+	fprintf(stderr,
+		"compiler: compilation finished %ssuccessfully\n",
+		compiler.hadError ? "un" : ""
+	);
+#endif
 
 	endCompiler(&compiler);
 

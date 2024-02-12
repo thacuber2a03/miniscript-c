@@ -37,7 +37,8 @@ static inline bool isObjType(ms_Value val, ms_ObjectType type)
 	return MS_IS_OBJ(val) && MS_OBJ_TYPE(val) == type;
 }
 
-ms_ObjString *ms_newString(ms_VM* vm, char *chars, size_t length);
+ms_ObjString *ms_newString(ms_VM *vm, char *str, size_t length);
+ms_ObjString *ms_copyString(ms_VM *vm, const char *str, size_t length);
 void ms_printObject(ms_Value val);
 double ms_getBoolObj(ms_Value val);
 

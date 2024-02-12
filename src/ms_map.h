@@ -18,6 +18,6 @@ void ms_initMap(ms_VM* vm, ms_Map *map);
 void ms_freeMap(ms_VM* vm, ms_Map *map);
 bool ms_setMapKey(ms_VM* vm, ms_Map *map, ms_Value key, ms_Value value);
 bool ms_getMapKey(ms_VM *vm, ms_Map *map, ms_Value key, ms_Value *value);
-ms_ObjString *ms_findStringInMap(ms_VM *vm, ms_Map *map, char* str, size_t length, uint32_t hash);
+ms_ObjString *ms_findStringInMap(ms_VM *vm, ms_Map *map, const char* str, size_t length, uint32_t hash);
 
 #endif
