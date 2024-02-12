@@ -191,7 +191,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 				if (MS_VAL_TYPE(temp) != MS_TYPE_NUM)
 					return ms_runtimeError(vm, "Can't currently operate on non-numbers.");
 				else
-					ms_pushValueIntoVM(vm, MS_FROM_NUM(pow(MS_TO_NUM(temp), MS_TO_NUM(temp2))));
+					ms_pushValueIntoVM(vm, MS_FROM_NUM(fmod(MS_TO_NUM(temp), MS_TO_NUM(temp2))));
 
 				break;
 
