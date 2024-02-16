@@ -32,10 +32,10 @@ void ms_addByteToCode(ms_VM *vm, ms_Code *code, uint8_t byte)
 
 size_t ms_addConstToCode(ms_VM *vm, ms_Code *code, ms_Value constant)
 {
-	for (size_t i = 0; i < code->constants.count; i++)
-		if (ms_valuesEqual(code->constants.data[i], constant))
-			return i;
+	int idx = ms_findValueInList(&code->constants, constant);
+	if (idx == -1)
+		return ms_addValueToList(vm, &code->constants, constant);
 
-	return ms_addValueToList(vm, &code->constants, constant);
+	return idx;
 }
 

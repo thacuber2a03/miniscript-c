@@ -42,5 +42,7 @@ typedef struct {
 void ms_initList(ms_VM *vm, ms_List *list);
 void ms_freeList(ms_VM *vm, ms_List *list);
 size_t ms_addValueToList(ms_VM *vm, ms_List *list, ms_Value val);
+int ms_findValueInList(ms_List *list, ms_Value val);
+ms_Value *ms_getValueFromList(ms_List *list, size_t index);
 
 #endif

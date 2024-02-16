@@ -34,7 +34,7 @@ static void runFile(ms_VM *vm, char *path)
 	int size = ftell(fp);
 	rewind(fp);
 
-	char *source = malloc(size);
+	char *source = malloc(size+1);
 	if (source == NULL)
 	{
 		fprintf(stderr, "couldn't allocate enough memory\n");
@@ -47,6 +47,7 @@ static void runFile(ms_VM *vm, char *path)
 		exit(-1);
 	}
 
+	source[size] = '\0';
 	ms_interpretString(vm, source);
 	free(source);
 }

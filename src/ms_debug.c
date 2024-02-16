@@ -22,22 +22,43 @@ static inline size_t simpleInstruction(uint8_t *code, size_t offset)
 static size_t constantInstruction(uint8_t *code, ms_List constants, size_t offset)
 {
 	int index = code[1];
-	printf("%s", ms_getOpcodeName(*code));
-	printf(" %i '", index);
+	printf("%s %i '", ms_getOpcodeName(*code), index);
 	ms_printValue(constants.data[index]);
 	printf("'");
 	return offset + 2;
 }
 
+static size_t byteInstruction(uint8_t *code, size_t offset)
+{
+	printf("%s %4d", ms_getOpcodeName(*code), code[1]);
+	return offset + 2;
+}
+
+static size_t jumpInstruction(uint8_t *code, size_t offset, int sign)
+{
+	uint16_t jump = (uint16_t)(code[1] << 8) | code[2];
+	printf("%s %zu -> %zu", ms_getOpcodeName(*code), offset, offset + 3 + sign * jump);
+	return offset + 3;
+}
+
 size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 {
+	printf("%zu | ", offset);
 	uint8_t *off = code->data + offset;
 	switch (*off)
 	{
 		case MS_OP_CONST:
-		case MS_OP_ASSIGN_GLOBAL:
+		case MS_OP_SET_GLOBAL:
 		case MS_OP_GET_GLOBAL:
 			return constantInstruction(off, code->constants, offset);
+
+		case MS_OP_SET_LOCAL:
+		case MS_OP_GET_LOCAL:
+			return byteInstruction(off, offset);
+
+		case MS_OP_JUMP:
+		case MS_OP_JUMP_IF_FALSE:
+			return jumpInstruction(off, offset, 1);
 
 		case MS_OP_TRUE:
 		case MS_OP_FALSE:

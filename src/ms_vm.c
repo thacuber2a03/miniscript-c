@@ -87,7 +87,7 @@ ms_Value ms_popValueFromVM(ms_VM *vm)
 
 ms_Value ms_peekIntoStack(ms_VM *vm, size_t distance)
 {
-	MS_ASSERT_REASON(vm->stackTop - 1 - distance != vm->stack, "peek index exits stack");
+	MS_ASSERT_REASON(vm->stackTop - 1 - distance >= vm->stack, "peek index exits stack");
 	return vm->stackTop[-1 - distance];
 }
 
@@ -108,6 +108,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 	register ms_Value temp, temp2;
 
 #define NEXT_BYTE() (*ip++)
+#define NEXT_SHORT() (ip += 2, (((uint16_t)ip[-2]) << 8 | (uint16_t)ip[-1]))
 #define NEXT_CONST() (code->constants.data[NEXT_BYTE()])
 #define BINARY_OP(vm, op) do {                               \
     temp2 = ms_popValueFromVM(vm);                           \
@@ -244,7 +245,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 			case MS_OP_GREATER_EQUAL: COMPARISON_OP(vm, >=); break;
 			case MS_OP_LESS_EQUAL:    COMPARISON_OP(vm, <=); break;
 			
-			case MS_OP_ASSIGN_GLOBAL:
+			case MS_OP_SET_GLOBAL:
 				ms_setMapKey(vm, &vm->globals, NEXT_CONST(), ms_popValueFromVM(vm));
 				break;
 
@@ -254,9 +255,34 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 				ms_pushValueIntoVM(vm, val);
 			} break;
 
+			case MS_OP_GET_LOCAL: {
+				uint8_t slot = NEXT_BYTE();
+				ms_pushValueIntoVM(vm, vm->stack[slot]);
+			} break;
+
+			case MS_OP_SET_LOCAL: {
+				uint8_t slot = NEXT_BYTE();
+				vm->stack[slot] = ms_popValueFromVM(vm);
+			} break;
+
 			case MS_OP_INVOKE: {
 				// this case is currently a bunch of do nothing
 				// just to not enter the default branch
+			} break;
+
+			case MS_OP_JUMP: {
+				uint16_t offset = NEXT_SHORT();
+				ip += offset;
+			} break;
+
+			case MS_OP_JUMP_IF_FALSE: {
+				uint16_t offset = NEXT_SHORT();
+				if (!ms_getBoolVal(ms_peekIntoStack(vm, 0))) ip += offset;
+			} break;
+
+			case MS_OP_LOOP: {
+				uint16_t offset = NEXT_SHORT();
+				ip -= offset + 3;
 			} break;
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;
@@ -281,12 +307,10 @@ void ms_runTestProgram(ms_VM *vm)
 	ms_Code code;
 	ms_initCode(vm, &code);
 
-	ms_addByteToCode(vm, &code, MS_OP_NULL);
-	ms_addByteToCode(vm, &code, MS_OP_FALSE);
 	ms_addByteToCode(vm, &code, MS_OP_TRUE);
-	ms_addByteToCode(vm, &code, MS_OP_POP);
-	ms_addByteToCode(vm, &code, MS_OP_POP);
-	ms_addByteToCode(vm, &code, MS_OP_RETURN);
+	ms_addByteToCode(vm, &code, MS_OP_LOOP);
+	ms_addByteToCode(vm, &code, 00);
+	ms_addByteToCode(vm, &code, 01);
 
 	interpret(vm, &code);
 

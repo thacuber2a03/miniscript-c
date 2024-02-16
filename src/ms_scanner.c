@@ -3,7 +3,6 @@
 #include "ms_scanner.h"
 
 #if 0
-// this is too nice tojust lose it
 #include <stdio.h>
 void ms_debugScanner(char *str)
 {
@@ -344,7 +343,7 @@ static ms_Token scanToken(ms_Scanner *scanner)
 
 		case '"': return scanString(scanner);
 
-		default:
+		default: {
 			if (isDigit(c)) return scanNumber(scanner, false);
 			if (isAlpha(c))
 			{
@@ -353,7 +352,10 @@ static ms_Token scanToken(ms_Scanner *scanner)
 				return tok;
 			}
 
-			return errToken(scanner, "Unknown character");
+			char err[128];
+			sprintf(err, "Unknown character '%c' %i", c, c);
+			return errToken(scanner, err);
+		}
 	}
 }
 

@@ -68,10 +68,24 @@ size_t ms_addValueToList(ms_VM *vm, ms_List *list, ms_Value val)
 		);
 	}
 
-	int idx = list->count;
+	int idx = list->count++;
 	list->data[idx] = val;
-	list->count++;
 	return idx;
+}
+
+int ms_findValueInList(ms_List *list, ms_Value val)
+{
+	for (size_t i = 0; i < list->count; i++)
+		if (ms_valuesEqual(list->data[i], val))
+			return i;
+
+	return -1;
+}
+
+ms_Value *ms_getValueFromList(ms_List *list, size_t index)
+{
+	if (index < list->count) return list->data + index;
+	return NULL;
 }
 
 // TODO: add insert and remove from list

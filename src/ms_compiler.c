@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "ms_compiler.h"
 #include "ms_object.h"
@@ -12,15 +13,9 @@
 #include "ms_debug.h"
 #endif
 
-typedef struct {
-	ms_Scanner scanner;
-	ms_VM *vm;
-	ms_Token previous, current;
-	ms_Code *currentCode;
-	bool hadError, panicMode;
-} ms_Compiler;
+typedef struct ms_Compiler ms_Compiler;
 
-typedef void (*ParseFn)(ms_Compiler *compiler);
+typedef void (*ParseFn)(ms_Compiler *compiler, bool canAssign);
 
 typedef enum {
 	PREC_NONE,
@@ -48,6 +43,25 @@ typedef struct {
 	ParsePrecedence precedence;
 } ParseRule;
 
+typedef struct {
+	ms_Token name;
+	size_t depth;
+} Local;
+
+typedef struct {
+	Local locals[UINT8_COUNT];
+	size_t localCount, scopeDepth;
+} Record;
+
+struct ms_Compiler {
+	ms_Scanner scanner;
+	ms_VM *vm;
+	ms_Token previous, current;
+	ms_Code *currentCode;
+	Record *currentRecord;
+	bool hadError, panicMode;
+};
+
 static void initCompiler
 	(ms_Compiler *compiler, ms_VM *vm, ms_Scanner scanner, ms_Code *mainCode)
 {
@@ -55,6 +69,13 @@ static void initCompiler
 	compiler->scanner = scanner;
 	compiler->currentCode = mainCode;
 	compiler->vm = vm;
+}
+
+static void initRecord(ms_Compiler *compiler, Record *rec)
+{
+	rec->localCount = 0;
+	rec->scopeDepth = 0;
+	compiler->currentRecord = rec;
 }
 
 static void errorAt(ms_Compiler *compiler, ms_Token *token, const char* message)
@@ -134,6 +155,14 @@ static void emitBytes(ms_Compiler *compiler, uint8_t byte1, uint8_t byte2)
 	ms_addByteToCode(compiler->vm, compiler->currentCode, byte2);
 }
 
+static size_t emitJump(ms_Compiler *compiler, uint8_t instruction)
+{
+	emitByte(compiler, instruction);
+	emitByte(compiler, 0xff);
+	emitByte(compiler, 0xff);
+	return compiler->currentCode->count - 2;
+}
+
 static void emitReturn(ms_Compiler *compiler)
 {
 	emitByte(compiler, MS_OP_RETURN);
@@ -156,14 +185,46 @@ static void emitConstant(ms_Compiler *compiler, ms_Value value)
 	emitBytes(compiler, MS_OP_CONST, makeConstant(compiler, value));
 }
 
+static void patchJump(ms_Compiler *compiler, size_t offset)
+{
+	size_t jump = compiler->currentCode->count - offset - 2;
+	if (jump > UINT16_MAX)
+	{
+		error(compiler, "Too much jump to code over.");
+	}
+
+	compiler->currentCode->data[offset] = (jump >> 8) & 0xff;
+	compiler->currentCode->data[offset + 1] = jump & 0xff;
+}
+
 static void endCompiler(ms_Compiler *compiler)
 {
 	emitReturn(compiler);
 #ifdef MS_DEBUG_PRINT_CODE
-	fprintf(stderr, "compiler: code disassembly:\n");
 	if (!compiler->hadError)
+	{
+		fprintf(stderr, "compiler: code disassembly:\n");
 		ms_disassembleCode(compiler->currentCode, "code");
+	}
 #endif
+}
+
+static void beginScope(ms_Compiler *compiler)
+{
+	compiler->currentRecord->scopeDepth++;
+}
+
+static void endScope(ms_Compiler *compiler)
+{
+	Record *rec = compiler->currentRecord;
+	rec->scopeDepth--;
+
+	while (rec->localCount > 0
+	   &&  rec->locals[rec->localCount - 1].depth > rec->scopeDepth)
+	{
+		emitByte(compiler, MS_OP_POP);
+		rec->localCount--;
+	}
 }
 
 ////////////////////////////
@@ -177,19 +238,46 @@ static uint8_t identifierConstant(ms_Compiler *compiler, ms_Token *name)
 	return makeConstant(compiler, MS_FROM_OBJ(ms_copyString(compiler->vm, name->start, name->length)));
 }
 
-static uint8_t parseVariable(ms_Compiler *compiler, const char *errorMessage)
-{
-	consume(compiler, MS_TOK_ID, errorMessage);
-	return identifierConstant(compiler, &compiler->previous);
+static bool identifiersEqual(ms_Token* a, ms_Token* b) {
+  if (a->length != b->length) return false;
+  return memcmp(a->start, b->start, a->length) == 0;
 }
 
-static inline void assignVariable(ms_Compiler *compiler, uint8_t global)
+static int resolveLocal(ms_Compiler *compiler, ms_Token *name)
 {
-	emitBytes(compiler, MS_OP_ASSIGN_GLOBAL, global);
+	Record *rec = compiler->currentRecord;
+	for (int i = rec->localCount - 1; i >= 0; i--)
+	{
+		Local* local = &rec->locals[i];
+		if (identifiersEqual(name, &local->name))
+			return i;
+	}
+
+	int idx = ms_findValueInList(&compiler->currentCode->constants, MS_FROM_OBJ(ms_copyString(compiler->vm, name->start, name->length)));
+	if (idx == -1) return -2; // undefined
+
+	return -1; // global
 }
 
-static void binary(ms_Compiler *compiler)
+static int addLocal(ms_Compiler *compiler, ms_Token name)
 {
+	Record *rec = compiler->currentRecord;
+	if (rec->localCount == UINT8_COUNT)
+	{
+		error(compiler, "Too many local variables in one block.");
+		return -1;
+	}
+
+	size_t idx = rec->localCount++;
+	Local *local = &rec->locals[idx];
+	local->name = name;
+	local->depth = rec->scopeDepth;
+	return idx;
+}
+
+static void binary(ms_Compiler *compiler, bool canAssign)
+{
+	MS_UNUSED(canAssign);
 	ms_TokenType operatorType = compiler->previous.type;
 	ParseRule *rule = getRule(operatorType);
 	parsePrecedence(compiler, (ParsePrecedence)(rule->precedence + 1));
@@ -216,20 +304,23 @@ static void binary(ms_Compiler *compiler)
 	}
 }
 
-static void grouping(ms_Compiler *compiler)
+static void grouping(ms_Compiler *compiler, bool canAssign)
 {
+	MS_UNUSED(canAssign);
 	expression(compiler);
 	consume(compiler, MS_TOK_RPAREN, "Expected ')' after expression");
 }
 
-static void number(ms_Compiler *compiler)
+static void number(ms_Compiler *compiler, bool canAssign)
 {
+	MS_UNUSED(canAssign);
 	double value = strtod(compiler->previous.start, NULL);
 	emitConstant(compiler, MS_FROM_NUM(value));
 }
 
-static void string(ms_Compiler *compiler)
+static void string(ms_Compiler *compiler, bool canAssign)
 {
+	MS_UNUSED(canAssign);
 	char* str = MS_MEM_MALLOC_ARR(compiler->vm, char, compiler->previous.length);
 	size_t realLen = 0;
 
@@ -248,21 +339,35 @@ static void string(ms_Compiler *compiler)
 	emitConstant(compiler, MS_FROM_OBJ(ms_newString(compiler->vm, str, realLen)));
 }
 
-static void namedVariable(ms_Compiler *compiler, ms_Token name)
+static void namedVariable(ms_Compiler *compiler, ms_Token name, bool canAssign)
 {
-	uint8_t arg = identifierConstant(compiler, &name);
-	emitBytes(compiler, MS_OP_GET_GLOBAL, arg);
+	uint8_t get;
+	int arg = resolveLocal(compiler, &name);
+	if (arg == -2)
+		error(compiler, "Undefined variable.");
+
+	if (arg != -1)
+		get = MS_OP_GET_LOCAL;
+	else
+	{
+		arg = identifierConstant(compiler, &name);
+		get = MS_OP_GET_GLOBAL;
+	}
+
+	emitBytes(compiler, get, arg);
 }
 
-static void variable(ms_Compiler *compiler)
+static void variable(ms_Compiler *compiler, bool canAssign)
 {
 	ms_TokenType prefix = compiler->previous.type;
-	namedVariable(compiler, compiler->previous);
+	if (prefix == MS_TOK_AT_SIGN) advance(compiler);
+	namedVariable(compiler, compiler->previous, canAssign);
 	if (prefix != MS_TOK_AT_SIGN) emitByte(compiler, MS_OP_INVOKE);
 }
 
-static void literal(ms_Compiler *compiler)
+static void literal(ms_Compiler *compiler, bool canAssign)
 {
+	MS_UNUSED(canAssign);
 	ms_TokenType operatorType = compiler->previous.type;
 	switch (operatorType)
 	{
@@ -273,8 +378,9 @@ static void literal(ms_Compiler *compiler)
 	}
 }
 
-static void unary(ms_Compiler *compiler)
+static void unary(ms_Compiler *compiler, bool canAssign)
 {
+	MS_UNUSED(canAssign);
 	ms_TokenType operatorType = compiler->previous.type;
 	parsePrecedence(compiler, PREC_UNARY);
 	switch (operatorType)
@@ -304,7 +410,7 @@ ParseRule rules[MS_TOK__END] = {
 	[MS_TOK_OR]      = {NULL,     binary, PREC_OR        },
 	[MS_TOK_NOT]     = {unary,    NULL,   PREC_NONE      },
 
-	[MS_TOK_AT_SIGN] = {variable, NULL,   PREC_ADDRESS   },
+	[MS_TOK_AT_SIGN] = {variable, NULL,   PREC_NONE      },
 
 	[MS_TOK_LPAREN]  = {grouping, NULL,   PREC_NONE      },
 
@@ -327,14 +433,18 @@ static void parsePrecedence(ms_Compiler *compiler, ParsePrecedence precedence)
 		return;
 	}
 
-	prefixRule(compiler);
+	bool canAssign = precedence <= PREC_FUNCTION;
+	prefixRule(compiler, canAssign);
 
 	while (precedence <= getRule(compiler->current.type)->precedence)
 	{
 		advance(compiler);
 		ParseFn infixRule = getRule(compiler->previous.type)->infix;
-		infixRule(compiler);
+		infixRule(compiler, canAssign);
 	}
+
+	if (canAssign && match(compiler, MS_TOK_ASSIGN))
+		error(compiler, "Invalid assignment target.");
 }
 
 static ParseRule *getRule(ms_TokenType type) { return &rules[type]; }
@@ -360,10 +470,37 @@ static void synchronize(ms_Compiler *compiler)
 
 static void assignment(ms_Compiler *compiler)
 {
-	uint8_t global = parseVariable(compiler, "Expected variable name.");
-	consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name.");
-	expression(compiler);
-	assignVariable(compiler, global);
+	if (check(compiler, MS_TOK_ID))
+	{
+		advance(compiler);
+
+		uint8_t set = MS_OP_SET_LOCAL;
+		int arg = resolveLocal(compiler, &compiler->previous);
+		if (arg == -2)
+		{
+			if (compiler->currentRecord->scopeDepth == 0)
+			{
+				arg = identifierConstant(compiler, &compiler->previous);
+				set = MS_OP_SET_GLOBAL;
+			}
+			else
+			{
+				arg = -1;
+				addLocal(compiler, compiler->previous);
+			}
+		}
+		else if (arg == -1)
+		{
+			arg = identifierConstant(compiler, &compiler->previous);
+			set = MS_OP_SET_GLOBAL;
+		}
+
+		consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name.");
+		expression(compiler);
+
+		if (arg != -1) emitBytes(compiler, set, arg);
+	}
+	else errorAtCurrent(compiler, "Expected identifier.");
 }
 
 static void statement(ms_Compiler *compiler)
@@ -373,21 +510,64 @@ static void statement(ms_Compiler *compiler)
 	&& !check(compiler, MS_TOK_TRUE)
 	&& !check(compiler, MS_TOK_FALSE))
 	{
+		advance(compiler);
+		switch (compiler->previous.type)
+		{
+			case MS_TOK_IF:
+				expression(compiler);
+				consume(compiler, MS_TOK_THEN, "Expected 'then' after condition.");
+				consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'then'."); // TODO
+
+				size_t thenJump = emitJump(compiler, MS_OP_JUMP_IF_FALSE);
+				emitByte(compiler, MS_OP_POP);
+
+				beginScope(compiler);
+				while (!check(compiler, MS_TOK_END_IF) && !check(compiler, MS_TOK_ELSE) && !check(compiler, MS_TOK_EOF))
+					statement(compiler);
+				endScope(compiler);
+
+				if (match(compiler, MS_TOK_ELSE))
+				{
+					consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'else'."); // TODO
+					size_t elseJump = emitJump(compiler, MS_OP_JUMP);
+					patchJump(compiler, thenJump);
+					emitByte(compiler, MS_OP_POP);
+
+					beginScope(compiler);
+					while (!check(compiler, MS_TOK_END_IF) && !check(compiler, MS_TOK_EOF))
+						statement(compiler);
+					endScope(compiler);
+
+					consume(compiler, MS_TOK_END_IF, "Expected 'end if' to close if statement block.");
+					patchJump(compiler, elseJump);
+				}
+				else
+				{
+					consume(compiler, MS_TOK_END_IF, "Expected 'end if' to close if statement block.");
+					patchJump(compiler, thenJump);
+				}
+				break;
+
+			default:
+				error(compiler, "Unexpected keyword.");
+		}
 	}
 	else
 	{
 		assignment(compiler);
 	}
 	
+	consume(compiler, MS_TOK_NEWLINE, "Expected newline after statement.");
 	if (compiler->panicMode) synchronize(compiler);
 }
 
 static void program(ms_Compiler *compiler)
 {
+	skipNewlines(compiler);
 	while (!match(compiler, MS_TOK_EOF))
 	{
-		skipNewlines(compiler);
 		statement(compiler);
+		skipNewlines(compiler);
 	}
 }
 
@@ -401,6 +581,9 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 
 	ms_Compiler compiler;
 	initCompiler(&compiler, vm, scanner, code);
+
+	Record rec;
+	initRecord(&compiler, &rec);
 
 	advance(&compiler);
 

@@ -60,8 +60,6 @@ TOKEN(MS_TOK_SELF)
 TOKEN(MS_TOK_GLOBALS)
 TOKEN(MS_TOK_LOCALS)
 
-TOKEN(MS_TOK__KEYWORD_END)
-
 TOKEN(MS_TOK__BLOCK_START)
 /*** do not modify the order of these!!! ***/
 TOKEN(MS_TOK_FUNC)   TOKEN(MS_TOK_END_FUNC)
@@ -71,6 +69,8 @@ TOKEN(MS_TOK_FOR)    TOKEN(MS_TOK_END_FOR)
 TOKEN(MS_TOK_REPEAT) TOKEN(MS_TOK_END_REPEAT)
 /*******************************************/
 TOKEN(MS_TOK__BLOCK_END)
+
+TOKEN(MS_TOK__KEYWORD_END)
 
 // "user" tokens, i.e. tokens that aren't keywords
 // but are still useful to know about

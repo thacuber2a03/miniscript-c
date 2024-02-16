@@ -55,10 +55,12 @@
 
 #else
 
-#define MS_ASSERT_REASON(cond, reason)
-#define MS_ASSERT(cond)
-#define MS_UNREACHABLE(place)
+#define MS_ASSERT_REASON(cond, reason) exit(-1)
+#define MS_ASSERT(cond) exit(-1)
+#define MS_UNREACHABLE(place) exit(-1)
 
 #endif // MS_DEBUG_ASSERTIONS
+
+#define UINT8_COUNT (UINT8_MAX+1)
 
 #endif // MS_COMMON_H
