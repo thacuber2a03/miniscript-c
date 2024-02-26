@@ -2,7 +2,7 @@
 
 #include "ms_scanner.h"
 
-#if 0
+#if 1
 #include <stdio.h>
 void ms_debugScanner(char *str)
 {

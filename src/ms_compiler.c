@@ -452,27 +452,20 @@ static void assignment(ms_Compiler *compiler)
 
 		uint8_t set = MS_OP_SET_LOCAL;
 		int arg = resolveLocal(compiler, &compiler->previous);
-		if (arg == -2)
-		{
-			if (compiler->currentRecord->scopeDepth == 0)
-			{
-				arg = identifierConstant(compiler, &compiler->previous);
-				set = MS_OP_SET_GLOBAL;
-			}
-			else
-			{
-				arg = -1;
-				addLocal(compiler, compiler->previous);
-			}
-		}
-		else if (arg == -1)
+		if ((arg == -2 && compiler->currentRecord->scopeDepth == 0) || arg == -1)
 		{
 			arg = identifierConstant(compiler, &compiler->previous);
 			set = MS_OP_SET_GLOBAL;
 		}
+		else
+		{
+			arg = -1;
+			addLocal(compiler, compiler->previous);
+		}
 
 		consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name.");
 		expression(compiler);
+		consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression.");
 
 		if (arg != -1) emitBytes(compiler, set, arg);
 	}
@@ -491,37 +484,14 @@ static void ifStatement(ms_Compiler *compiler)
 	beginScope(compiler);
 
 	while (!check(compiler, MS_TOK_END_IF)
-		 &&  !check(compiler, MS_TOK_ELSE)
-		 &&  !check(compiler, MS_TOK_ELSE_IF)
 		 &&  !check(compiler, MS_TOK_EOF))
 		statement(compiler);
 
 	endScope(compiler);
 
-	if (match(compiler, MS_TOK_ELSE_IF)) ifStatement(compiler);
+	patchJump(compiler, thenJump);
 
-	if (match(compiler, MS_TOK_ELSE))
-	{
-		expression(compiler);
-		consume(compiler, MS_TOK_THEN, "Expected 'then' after condition.");
-		consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'then'.");
-
-		size_t elseJump = emitJump(compiler, MS_OP_JUMP);
-		patchJump(compiler, thenJump);
-		emitByte(compiler, MS_OP_POP);
-
-		beginScope(compiler);
-
-		while (!check(compiler, MS_TOK_END_IF)
-		   &&  !check(compiler, MS_TOK_ELSE)
-		   &&  !check(compiler, MS_TOK_ELSE_IF)
-		   &&  !check(compiler, MS_TOK_EOF))
-			statement(compiler);
-
-		endScope(compiler);
-
-		patchJump(compiler, elseJump);
-	}
+	consume(compiler, MS_TOK_END_IF, "Expected 'end if'.");
 }
 
 static void statement(ms_Compiler *compiler)
@@ -545,9 +515,7 @@ static void statement(ms_Compiler *compiler)
 	else
 	{
 		assignment(compiler);
-	}
-	
-	consume(compiler, MS_TOK_NEWLINE, "Expected newline after statement.");
+	}	
 }
 
 static void program(ms_Compiler *compiler)
@@ -567,6 +535,7 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 #endif
 	ms_Scanner scanner;
 	ms_initScanner(&scanner, source);
+	ms_debugScanner(source);
 
 	ms_Compiler compiler;
 	initCompiler(&compiler, vm, scanner, code);
