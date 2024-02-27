@@ -282,7 +282,7 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 
 			case MS_OP_LOOP: {
 				uint16_t offset = NEXT_SHORT();
-				ip -= offset + 3;
+				ip -= offset;
 			} break;
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;

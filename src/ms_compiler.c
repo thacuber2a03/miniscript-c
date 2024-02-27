@@ -45,12 +45,12 @@ typedef struct {
 
 typedef struct {
 	ms_Token name;
-	size_t depth;
+	int depth;
 } Local;
 
 typedef struct {
 	Local locals[UINT8_COUNT];
-	size_t localCount, scopeDepth;
+	int localCount, scopeDepth;
 } Record;
 
 struct ms_Compiler {
@@ -149,6 +149,17 @@ static void emitBytes(ms_Compiler *compiler, uint8_t byte1, uint8_t byte2)
 	ms_addByteToCode(compiler->vm, compiler->currentCode, byte2);
 }
 
+static void emitLoop(ms_Compiler *compiler, int loopStart)
+{
+	emitByte(compiler, MS_OP_LOOP);
+
+	int offset = compiler->currentCode->count - loopStart + 2;
+	if (offset > UINT16_MAX) error(compiler, "Loop body too large.");
+
+	emitByte(compiler, (offset >> 8) & 0xff);
+	emitByte(compiler,  offset       & 0xff);
+}
+
 static size_t emitJump(ms_Compiler *compiler, uint8_t instruction)
 {
 	emitByte(compiler, instruction);
@@ -182,10 +193,7 @@ static void emitConstant(ms_Compiler *compiler, ms_Value value)
 static void patchJump(ms_Compiler *compiler, size_t offset)
 {
 	size_t jump = compiler->currentCode->count - offset - 2;
-	if (jump > UINT16_MAX)
-	{
-		error(compiler, "Too much jump to code over");
-	}
+	if (jump > UINT16_MAX) error(compiler, "Too much jump to code over");
 
 	compiler->currentCode->data[offset] = (jump >> 8) & 0xff;
 	compiler->currentCode->data[offset + 1] = jump & 0xff;
@@ -245,7 +253,7 @@ static bool identifiersEqual(ms_Token* a, ms_Token* b) {
 static int resolveLocal(ms_Compiler *compiler, ms_Token *name)
 {
 	Record *rec = compiler->currentRecord;
-	for (size_t i = rec->localCount - 1; i >= rec->localCount - 2; i--)
+	for (int i = rec->localCount - 1; i >= rec->localCount - 2; i--)
 	{
 		Local* local = &rec->locals[i];
 		if (identifiersEqual(name, &local->name))
@@ -340,7 +348,7 @@ static void variable(ms_Compiler *compiler)
 	if (prefix == MS_TOK_AT_SIGN) advance(compiler);
 
 	uint8_t get;
-	int arg = resolveLocal(compiler, &compiler->current);
+	int arg = resolveLocal(compiler, &compiler->previous);
 
 	if (arg == -2) error(compiler, "Undefined variable");
 
@@ -348,7 +356,7 @@ static void variable(ms_Compiler *compiler)
 		get = MS_OP_GET_LOCAL;
 	else
 	{
-		arg = identifierConstant(compiler, &compiler->current);
+		arg = identifierConstant(compiler, &compiler->previous);
 		get = MS_OP_GET_GLOBAL;
 	}
 
@@ -459,7 +467,7 @@ static void assignment(ms_Compiler *compiler)
 		}
 		else
 		{
-			arg = -1;
+			arg = -3;
 			addLocal(compiler, compiler->previous);
 		}
 
@@ -467,7 +475,7 @@ static void assignment(ms_Compiler *compiler)
 		expression(compiler);
 		consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression.");
 
-		if (arg != -1) emitBytes(compiler, set, arg);
+		if (arg != -3) emitBytes(compiler, set, arg);
 	}
 	else errorAtCurrent(compiler, "Expected identifier.");
 }
@@ -483,15 +491,21 @@ static void ifStatement(ms_Compiler *compiler)
 
 	beginScope(compiler);
 
-	while (!check(compiler, MS_TOK_END_IF)
-		 &&  !check(compiler, MS_TOK_EOF))
+	while (!check(compiler, MS_TOK_EOF)
+		 &&  !check(compiler, MS_TOK_END_IF))
+	{
 		statement(compiler);
+		skipNewlines(compiler);
+	}
 
 	endScope(compiler);
 
-	patchJump(compiler, thenJump);
-
 	consume(compiler, MS_TOK_END_IF, "Expected 'end if'.");
+
+	size_t endJump = emitJump(compiler, MS_OP_JUMP);
+	patchJump(compiler, thenJump);
+	emitByte(compiler, MS_OP_POP);
+	patchJump(compiler, endJump);
 }
 
 static void statement(ms_Compiler *compiler)
@@ -507,6 +521,33 @@ static void statement(ms_Compiler *compiler)
 			case MS_TOK_IF:
 				ifStatement(compiler);
 				break;
+
+			case MS_TOK_WHILE: {
+				int loopStart = compiler->currentCode->count;
+				expression(compiler);
+				consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression.");
+
+				int exitJump = emitJump(compiler, MS_OP_JUMP_IF_FALSE);
+				emitByte(compiler, MS_OP_POP);
+
+				beginScope(compiler);
+
+				while (!check(compiler, MS_TOK_EOF)
+				   &&  !check(compiler, MS_TOK_END_WHILE))
+				{
+					statement(compiler);
+					skipNewlines(compiler);
+				}
+
+				endScope(compiler);
+
+				consume(compiler, MS_TOK_END_WHILE, "Expected 'end while'.");
+
+				emitLoop(compiler, loopStart);
+
+				patchJump(compiler, exitJump);
+				emitByte(compiler, MS_OP_POP);
+			} break;
 
 			default:
 				MS_UNREACHABLE("statement");

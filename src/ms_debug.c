@@ -60,6 +60,9 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 		case MS_OP_JUMP_IF_FALSE:
 			return jumpInstruction(off, offset, 1);
 
+		case MS_OP_LOOP:
+			return jumpInstruction(off, offset, -1);
+
 		case MS_OP_TRUE:
 		case MS_OP_FALSE:
 		case MS_OP_NULL:

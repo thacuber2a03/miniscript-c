@@ -10,4 +10,5 @@ The implementation is not yet ready, but it's stored here for backup reasons and
 
 - Strings, numbers and null
 - Local variables
-- If statements
+- If statements (no `else` or `else if` atm)
+- While statements
