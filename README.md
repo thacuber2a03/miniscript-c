@@ -12,3 +12,5 @@ The implementation is not yet ready, but it's stored here for backup reasons and
 - Local variables
 - If statements (no `else` or `else if` atm)
 - While statements
+- Function expressions
+- Return statement
