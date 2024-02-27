@@ -1,11 +1,12 @@
+#include "ms_code.h"
 #ifdef MS_DEBUG_MEM_ALLOC
 #include <stdio.h>
 #endif
 #include <stdlib.h>
 
 #include "ms_common.h"
-#include "ms_vm.h"
 #include "ms_object.h"
+#include "ms_vm.h"
 #include "ms_mem.h"
 
 void *ms_vmRealloc(ms_VM *vm, void *ptr, size_t oldSize, size_t newSize)
@@ -34,6 +35,12 @@ static void freeObject(ms_VM* vm, ms_Object *object)
 {
 	switch (object->type)
 	{
+		case MS_OBJ_FUNCTION: {
+			ms_ObjFunction *function = (ms_ObjFunction*)object;
+			ms_freeCode(vm, &function->code);
+			MS_MEM_FREE(vm, object, sizeof(ms_ObjFunction));
+		} break;
+
 		case MS_OBJ_STRING: {
 			ms_ObjString *str = (ms_ObjString*)object;
 			MS_MEM_FREE_ARR(vm, char, str->chars, str->length + 1);

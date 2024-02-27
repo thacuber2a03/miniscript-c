@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "ms_code.h"
 #include "ms_mem.h"
 #include "ms_object.h"
 #include "ms_map.h"
@@ -15,7 +16,15 @@ static ms_Object *newObject(ms_VM *vm, size_t size, ms_ObjectType type)
 	return obj;
 }
 
-ms_ObjString *allocateString(ms_VM *vm, char *str, size_t length, uint32_t hash)
+ms_ObjFunction *ms_newFunction(ms_VM *vm)
+{
+	ms_ObjFunction *function = (ms_ObjFunction*)newObject(vm, sizeof(ms_ObjFunction), MS_OBJ_FUNCTION);
+	function->arity = 0;
+	ms_initCode(vm, &function->code);
+	return function;
+}
+
+static ms_ObjString *allocateString(ms_VM *vm, char *str, size_t length, uint32_t hash)
 {
 	ms_ObjString *obj = (ms_ObjString*)newObject(vm, sizeof(ms_ObjString), MS_OBJ_STRING);
 	obj->chars = str;
@@ -49,12 +58,23 @@ ms_ObjString *ms_copyString(ms_VM *vm, const char *str, size_t length)
 	return allocateString(vm, heapStr, length, hash);
 }
 
+void printFunction(ms_ObjFunction *function)
+{
+	MS_UNUSED(function);
+	// TODO: print arguments and default values
+	printf("FUNCTION");
+}
+
 void ms_printObject(ms_Value val)
 {
 	switch (MS_OBJ_TYPE(val))
 	{
 		case MS_OBJ_STRING:
 			printf("%s", MS_TO_CSTRING(val));
+			break;
+
+		case MS_OBJ_FUNCTION:
+			printFunction(MS_TO_FUNCTION(val));
 			break;
 
 		default: MS_UNREACHABLE("ms_printObject"); break;

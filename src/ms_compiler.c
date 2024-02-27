@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "ms_compiler.h"
 #include "ms_object.h"
@@ -48,7 +49,15 @@ typedef struct {
 	int depth;
 } Local;
 
-typedef struct {
+typedef enum {
+	TYPE_FUNCTION,
+	TYPE_SCRIPT,
+} FunctionType;
+
+typedef struct Record {
+	struct Record *enclosing;
+	ms_ObjFunction *function;
+	FunctionType type;
 	Local locals[UINT8_COUNT];
 	int localCount, scopeDepth;
 } Record;
@@ -63,19 +72,30 @@ struct ms_Compiler {
 };
 
 static void initCompiler
-	(ms_Compiler *compiler, ms_VM *vm, ms_Scanner scanner, ms_Code *mainCode)
+	(ms_Compiler *compiler, ms_VM *vm, ms_Scanner scanner)
 {
 	compiler->hadError = false;
 	compiler->scanner = scanner;
-	compiler->currentCode = mainCode;
 	compiler->vm = vm;
+	compiler->currentRecord = NULL;
 }
 
-static void initRecord(ms_Compiler *compiler, Record *rec)
+static void initRecord(ms_Compiler *compiler, Record *rec, FunctionType type)
 {
+	rec->enclosing = compiler->currentRecord;
+	rec->function = NULL;
+	rec->type = type;
 	rec->localCount = 0;
 	rec->scopeDepth = 0;
+	rec->function = ms_newFunction(compiler->vm);
+
 	compiler->currentRecord = rec;
+	compiler->currentCode = &rec->function->code;
+
+	Local *local = &rec->locals[rec->localCount++];
+	local->depth = 0;
+	local->name.start = "";
+	local->name.length = 0;
 }
 
 static void advance(ms_Compiler *compiler);
@@ -114,10 +134,20 @@ static void consume(ms_Compiler *compiler, ms_TokenType type, const char *messag
 	errorAtCurrent(compiler, message);
 }
 
-static inline bool check(ms_Compiler *compiler, ms_TokenType type)
+static bool vcheck(ms_Compiler *compiler, int n, ...)
 {
-	return compiler->current.type == type;
+	va_list arg;
+	va_start(arg, n);
+
+	for (int i = 0; i < n; i++)
+		if (compiler->current.type == va_arg(arg, ms_TokenType))
+			return true;
+
+	va_end(arg);
+	return false;
 }
+
+#define check(compiler, type) vcheck(compiler, 1, type)
 
 static bool match(ms_Compiler *compiler, ms_TokenType type)
 {
@@ -140,13 +170,17 @@ static inline bool checkKeyword(ms_Compiler *compiler)
 
 static void emitByte(ms_Compiler *compiler, uint8_t byte)
 {
-	ms_addByteToCode(compiler->vm, compiler->currentCode, byte);
+	ms_addByteToCode(
+		compiler->vm, compiler->currentCode,
+		byte, compiler->current.line
+	);
 }
 
 static void emitBytes(ms_Compiler *compiler, uint8_t byte1, uint8_t byte2)
 {
-	ms_addByteToCode(compiler->vm, compiler->currentCode, byte1);
-	ms_addByteToCode(compiler->vm, compiler->currentCode, byte2);
+	int line = compiler->current.line;
+	ms_addByteToCode(compiler->vm, compiler->currentCode, byte1, line);
+	ms_addByteToCode(compiler->vm, compiler->currentCode, byte2, line);
 }
 
 static void emitLoop(ms_Compiler *compiler, int loopStart)
@@ -154,7 +188,7 @@ static void emitLoop(ms_Compiler *compiler, int loopStart)
 	emitByte(compiler, MS_OP_LOOP);
 
 	int offset = compiler->currentCode->count - loopStart + 2;
-	if (offset > UINT16_MAX) error(compiler, "Loop body too large.");
+	if (offset > UINT16_MAX) error(compiler, "Loop body too large");
 
 	emitByte(compiler, (offset >> 8) & 0xff);
 	emitByte(compiler,  offset       & 0xff);
@@ -170,7 +204,7 @@ static size_t emitJump(ms_Compiler *compiler, uint8_t instruction)
 
 static void emitReturn(ms_Compiler *compiler)
 {
-	emitByte(compiler, MS_OP_RETURN);
+	emitBytes(compiler, MS_OP_NULL, MS_OP_RETURN);
 }
 
 static uint8_t makeConstant(ms_Compiler *compiler, ms_Value value)
@@ -199,9 +233,11 @@ static void patchJump(ms_Compiler *compiler, size_t offset)
 	compiler->currentCode->data[offset + 1] = jump & 0xff;
 }
 
-static void endCompiler(ms_Compiler *compiler)
+static ms_ObjFunction *endCompiler(ms_Compiler *compiler)
 {
 	emitReturn(compiler);
+	ms_ObjFunction *function = compiler->currentRecord->function;
+
 #ifdef MS_DEBUG_PRINT_CODE
 	if (!compiler->hadError)
 	{
@@ -209,6 +245,11 @@ static void endCompiler(ms_Compiler *compiler)
 		ms_disassembleCode(compiler->currentCode, "code");
 	}
 #endif
+
+	compiler->currentRecord = compiler->currentRecord->enclosing;
+	if (compiler->currentRecord != NULL)
+		compiler->currentCode = &compiler->currentRecord->function->code;
+	return function;
 }
 
 static void beginScope(ms_Compiler *compiler)
@@ -231,6 +272,18 @@ static void endScope(ms_Compiler *compiler)
 
 ////////////////////////////
 
+#define block(compiler, ...) do {                                               \
+  beginScope(compiler);                                                         \
+  skipNewlines(compiler);                                                       \
+  int numArgs = sizeof((ms_TokenType[]){__VA_ARGS__})/sizeof(ms_TokenType);     \
+  while (!vcheck(compiler, numArgs+1, MS_TOK_EOF, __VA_ARGS__)) {               \
+    statement(compiler);                                                        \
+    skipNewlines(compiler);                                                     \
+  }                                                                             \
+  endScope(compiler);                                                           \
+} while(0)
+
+static void statement(ms_Compiler *compiler);
 static void expression(ms_Compiler *compiler);
 static ParseRule *getRule(ms_TokenType type);
 static void parsePrecedence(ms_Compiler* compiler, ParsePrecedence precedence);
@@ -253,7 +306,7 @@ static bool identifiersEqual(ms_Token* a, ms_Token* b) {
 static int resolveLocal(ms_Compiler *compiler, ms_Token *name)
 {
 	Record *rec = compiler->currentRecord;
-	for (int i = rec->localCount - 1; i >= rec->localCount - 2; i--)
+	for (int i = rec->localCount - 1; i >= 0; i--)
 	{
 		Local* local = &rec->locals[i];
 		if (identifiersEqual(name, &local->name))
@@ -362,7 +415,26 @@ static void variable(ms_Compiler *compiler)
 
 	emitBytes(compiler, get, arg);
 
-	if (prefix != MS_TOK_AT_SIGN) emitByte(compiler, MS_OP_INVOKE);
+	if (prefix != MS_TOK_AT_SIGN)
+		// TODO: arguments
+		emitBytes(compiler, MS_OP_INVOKE, 0);
+}
+
+static void function(ms_Compiler *compiler)
+{
+	Record record;
+	initRecord(compiler, &record, TYPE_FUNCTION);
+	beginScope(compiler);
+
+	// no params for now
+	consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'function'");
+
+	block(compiler, MS_TOK_END_FUNC);
+
+	consume(compiler, MS_TOK_END_FUNC, "Expected 'end function'");
+	
+	ms_ObjFunction *function = endCompiler(compiler);
+	emitBytes(compiler, MS_OP_CONST, makeConstant(compiler, MS_FROM_OBJ(function)));
 }
 
 static void literal(ms_Compiler *compiler)
@@ -419,6 +491,8 @@ ParseRule rules[MS_TOK__END] = {
 	[MS_TOK_NUM]     = {number,   NULL,   PREC_NONE      },
 	[MS_TOK_STR]     = {string,   NULL,   PREC_NONE      },
 	[MS_TOK_ID]      = {variable, NULL,   PREC_NONE      },
+
+	[MS_TOK_FUNC]    = {function, NULL,   PREC_FUNCTION  },
 };
 
 static void parsePrecedence(ms_Compiler *compiler, ParsePrecedence precedence)
@@ -450,8 +524,6 @@ static void expression(ms_Compiler *compiler)
 
 ////////////////////////////
 
-static void statement(ms_Compiler *compiler);
-
 static void assignment(ms_Compiler *compiler)
 {
 	if (check(compiler, MS_TOK_ID))
@@ -471,36 +543,27 @@ static void assignment(ms_Compiler *compiler)
 			addLocal(compiler, compiler->previous);
 		}
 
-		consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name.");
+		consume(compiler, MS_TOK_ASSIGN, "Expected '=' after variable name");
 		expression(compiler);
-		consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression.");
+		consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression");
 
 		if (arg != -3) emitBytes(compiler, set, arg);
 	}
-	else errorAtCurrent(compiler, "Expected identifier.");
+	else errorAtCurrent(compiler, "Expected identifier");
 }
 
 static void ifStatement(ms_Compiler *compiler)
 {
 	expression(compiler);
-	consume(compiler, MS_TOK_THEN, "Expected 'then' after condition.");
-	consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'then'.");
+	consume(compiler, MS_TOK_THEN, "Expected 'then' after condition");
+	consume(compiler, MS_TOK_NEWLINE, "Expected newline after 'then'");
 
 	size_t thenJump = emitJump(compiler, MS_OP_JUMP_IF_FALSE);
 	emitByte(compiler, MS_OP_POP);
 
-	beginScope(compiler);
+	block(compiler, MS_TOK_END_IF);
 
-	while (!check(compiler, MS_TOK_EOF)
-		 &&  !check(compiler, MS_TOK_END_IF))
-	{
-		statement(compiler);
-		skipNewlines(compiler);
-	}
-
-	endScope(compiler);
-
-	consume(compiler, MS_TOK_END_IF, "Expected 'end if'.");
+	consume(compiler, MS_TOK_END_IF, "Expected 'end if'");
 
 	size_t endJump = emitJump(compiler, MS_OP_JUMP);
 	patchJump(compiler, thenJump);
@@ -525,28 +588,30 @@ static void statement(ms_Compiler *compiler)
 			case MS_TOK_WHILE: {
 				int loopStart = compiler->currentCode->count;
 				expression(compiler);
-				consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression.");
+				consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression");
 
 				int exitJump = emitJump(compiler, MS_OP_JUMP_IF_FALSE);
 				emitByte(compiler, MS_OP_POP);
 
-				beginScope(compiler);
+				block(compiler, MS_TOK_END_WHILE);
 
-				while (!check(compiler, MS_TOK_EOF)
-				   &&  !check(compiler, MS_TOK_END_WHILE))
-				{
-					statement(compiler);
-					skipNewlines(compiler);
-				}
-
-				endScope(compiler);
-
-				consume(compiler, MS_TOK_END_WHILE, "Expected 'end while'.");
+				consume(compiler, MS_TOK_END_WHILE, "Expected 'end while'");
 
 				emitLoop(compiler, loopStart);
 
 				patchJump(compiler, exitJump);
 				emitByte(compiler, MS_OP_POP);
+			} break;
+
+			case MS_TOK_RETURN: {
+				if (match(compiler, MS_TOK_NEWLINE))
+					emitReturn(compiler);
+				else
+				{
+					expression(compiler);
+					consume(compiler, MS_TOK_NEWLINE, "Expected newline after expression");
+					emitByte(compiler, MS_OP_RETURN);
+				}
 			} break;
 
 			default:
@@ -569,7 +634,7 @@ static void program(ms_Compiler *compiler)
 	}
 }
 
-ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
+ms_ObjFunction *ms_compileString(ms_VM* vm, char *source)
 {
 #ifdef MS_DEBUG_COMPILATION
 	fprintf(stderr, "compiler: setting up compiler\n");
@@ -579,10 +644,10 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 	ms_debugScanner(source);
 
 	ms_Compiler compiler;
-	initCompiler(&compiler, vm, scanner, code);
+	initCompiler(&compiler, vm, scanner);
 
 	Record rec;
-	initRecord(&compiler, &rec);
+	initRecord(&compiler, &rec, TYPE_SCRIPT);
 
 	advance(&compiler);
 
@@ -599,7 +664,6 @@ ms_InterpretResult ms_compileString(ms_VM* vm, char *source, ms_Code *code)
 	);
 #endif
 
-	endCompiler(&compiler);
-
-	return compiler.hadError ? MS_INTERPRET_COMPILE_ERROR : MS_INTERPRET_OK;
+	ms_ObjFunction *function = endCompiler(&compiler);
+	return compiler.hadError ? NULL : function;
 }

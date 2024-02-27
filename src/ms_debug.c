@@ -54,6 +54,7 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 
 		case MS_OP_SET_LOCAL:
 		case MS_OP_GET_LOCAL:
+		case MS_OP_INVOKE:
 			return byteInstruction(off, offset);
 
 		case MS_OP_JUMP:
@@ -82,7 +83,6 @@ size_t ms_disassembleInstruction(ms_Code *code, size_t offset)
 		case MS_OP_AND:
 		case MS_OP_OR:
 		case MS_OP_NOT:
-		case MS_OP_INVOKE:
 		case MS_OP_POP:
 		case MS_OP_RETURN:
 			return simpleInstruction(off, offset);

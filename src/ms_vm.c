@@ -1,3 +1,4 @@
+#include "miniscript.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -98,18 +99,59 @@ void ms_pushFalseIntoVM(ms_VM *vm) { ms_pushValueIntoVM(vm, MS_FROM_NUM(0)); }
 ms_InterpretResult ms_runtimeError(ms_VM *vm, const char *err)
 {
 	MS_UNUSED(vm);
-	fprintf(stderr, "Error: %s\n", err);
+	CallFrame *frame = &vm->frames[vm->frameCount-1];
+	size_t instruction = frame->ip - frame->function->code.data - 1;
+	int line = frame->function->code.lines[instruction];
+	fprintf(stderr, "Runtime Error: %s [line %i]\n", err, line);
 	return MS_INTERPRET_RUNTIME_ERROR;
 }
 
-static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
+static void call(ms_VM *vm, ms_ObjFunction *func, int argCount)
 {
-	register uint8_t *ip = code->data;
+	if (argCount > func->arity)
+	{
+		ms_runtimeError(vm, "Too many arguments");
+		return;
+	}
+
+	if (vm->frameCount == MS_MAX_FRAMES_AMT)
+	{
+		ms_runtimeError(vm, "Stack overflow");
+		return;
+	}
+
+	CallFrame *frame = &vm->frames[vm->frameCount++];
+	frame->function = func;
+	frame->ip = func->code.data;
+	frame->slots = vm->stackTop - argCount - 1;
+}
+
+static void callValue(ms_VM *vm, ms_Value callee, int argCount)
+{
+	if (MS_IS_OBJ(callee))
+	{
+		switch (MS_OBJ_TYPE(callee))
+		{
+			case MS_OBJ_FUNCTION:
+				call(vm, MS_TO_FUNCTION(callee), argCount);
+				break;
+
+			default:
+				MS_UNREACHABLE("callValue");
+				break;
+		}
+	}
+
+	return;
+}
+
+static ms_InterpretResult interpret(register ms_VM* vm, register CallFrame *frame)
+{
 	register ms_Value temp, temp2;
 
-#define NEXT_BYTE() (*ip++)
-#define NEXT_SHORT() (ip += 2, (((uint16_t)ip[-2]) << 8 | (uint16_t)ip[-1]))
-#define NEXT_CONST() (code->constants.data[NEXT_BYTE()])
+#define NEXT_BYTE() (*frame->ip++)
+#define NEXT_SHORT() (frame->ip += 2, (((uint16_t)frame->ip[-2]) << 8 | (uint16_t)frame->ip[-1]))
+#define NEXT_CONST() (frame->function->code.constants.data[NEXT_BYTE()])
 #define BINARY_OP(vm, op) do {                               \
     temp2 = ms_popValueFromVM(vm);                           \
     temp = ms_popValueFromVM(vm);                            \
@@ -145,15 +187,16 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 	for (;;)
 	{
 #ifdef MS_DEBUG_EXECUTION
-		printf("vm: stack state: ");
+		printf("stack state: ");
 		for (ms_Value *i = vm->stack; i < vm->stackTop; i++)
 		{
 			printf("[");
 			ms_printValue(*i);
 			printf("]");
 		}
-		printf("\nvm: current instruction: ");
-		ms_disassembleInstruction(code, ip-code->data);
+		printf("\ncurrent instruction: ");
+		ms_disassembleInstruction(&frame->function->code,
+			    (int)(frame->ip - frame->function->code.data));
 		printf("\n");
 #endif
 
@@ -257,41 +300,54 @@ static ms_InterpretResult interpret(ms_VM* vm, ms_Code *code)
 
 			case MS_OP_GET_LOCAL: {
 				uint8_t slot = NEXT_BYTE();
-				ms_pushValueIntoVM(vm, vm->stack[slot]);
+				ms_pushValueIntoVM(vm, frame->slots[slot]);
 			} break;
 
 			case MS_OP_SET_LOCAL: {
 				uint8_t slot = NEXT_BYTE();
-				vm->stack[slot] = ms_popValueFromVM(vm);
+				frame->slots[slot] = ms_popValueFromVM(vm);
 			} break;
 
 			case MS_OP_INVOKE: {
-				// this case is currently a bunch of do nothing
-				// just to not enter the default branch
+				int argCount = NEXT_BYTE();
+				callValue(vm, ms_peekIntoStack(vm, argCount), argCount);
+
+				frame = &vm->frames[vm->frameCount-1];
 			} break;
 
 			case MS_OP_JUMP: {
 				uint16_t offset = NEXT_SHORT();
-				ip += offset;
+				frame->ip += offset;
 			} break;
 
 			case MS_OP_JUMP_IF_FALSE: {
 				uint16_t offset = NEXT_SHORT();
-				if (!ms_getBoolVal(ms_peekIntoStack(vm, 0))) ip += offset;
+				if (!ms_getBoolVal(ms_peekIntoStack(vm, 0))) frame->ip += offset;
 			} break;
 
 			case MS_OP_LOOP: {
 				uint16_t offset = NEXT_SHORT();
-				ip -= offset;
+				frame->ip -= offset;
 			} break;
 
 			case MS_OP_POP: ms_popValueFromVM(vm); break;
 
-			case MS_OP_RETURN:
+			case MS_OP_RETURN: {
+				ms_Value result = ms_popValueFromVM(vm);
+				vm->frameCount--;
+				if (vm->frameCount == 0)
+				{
+					ms_popValueFromVM(vm);
 #ifdef MS_DEBUG_EXECUTION
-				printf("vm: sucessfully finished execution!\n");
+					printf("vm: sucessfully finished execution!\n");
 #endif
-				return MS_INTERPRET_OK;
+					return MS_INTERPRET_OK;
+				}
+
+				vm->stackTop = frame->slots;
+				ms_pushValueIntoVM(vm, result);
+				frame = &vm->frames[vm->frameCount-1];
+			} break;
 
 			default: MS_UNREACHABLE("interpret"); break;
 		}
@@ -307,29 +363,23 @@ void ms_runTestProgram(ms_VM *vm)
 	ms_Code code;
 	ms_initCode(vm, &code);
 
-	ms_addByteToCode(vm, &code, MS_OP_TRUE);
-	ms_addByteToCode(vm, &code, MS_OP_LOOP);
-	ms_addByteToCode(vm, &code, 00);
-	ms_addByteToCode(vm, &code, 01);
+	ms_addByteToCode(vm, &code, MS_OP_TRUE, 42);
+	ms_addByteToCode(vm, &code, MS_OP_LOOP, 42);
+	ms_addByteToCode(vm, &code, 00, 42);
+	ms_addByteToCode(vm, &code, 01, 42);
 
-	interpret(vm, &code);
+	// interpret(vm);
 
 	ms_freeCode(vm, &code);
 }
 
 ms_InterpretResult ms_interpretString(ms_VM *vm, char *str)
 {
-	ms_Code code;
-	ms_initCode(vm, &code);
+	ms_ObjFunction *function = ms_compileString(vm, str);
+	if (function == NULL) return MS_INTERPRET_COMPILE_ERROR;
 
-	ms_InterpretResult res = ms_compileString(vm, str, &code);
-	if (res != MS_INTERPRET_OK)
-	{
-		ms_freeCode(vm, &code);
-		return res;
-	}
+	ms_pushValueIntoVM(vm, MS_FROM_OBJ(function));
+	call(vm, function, 0);
 
-	res = interpret(vm, &code);
-	ms_freeCode(vm, &code);
-	return res;
+	return interpret(vm, &vm->frames[vm->frameCount-1]);
 }
